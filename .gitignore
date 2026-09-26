@@ -1,0 +1,10 @@
+﻿venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+
+# Cached API data - regenerable, don't need to be in git
+data/raw/
+data/processed/
