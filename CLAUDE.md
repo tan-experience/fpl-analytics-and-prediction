@@ -13,6 +13,13 @@ Beginner in Python. Explain new concepts simply when they come up. Prefer
 small, working steps over large speculative builds. Comment code more than
 you normally would.
 
+This project is also a portfolio piece for a career transition into AI
+Product Management, and will eventually be a public GitHub repo. When
+relevant, flag product-management lessons or trade-offs worth noting (scope
+cuts, sequencing, platform constraints, build-vs-simplify calls), and
+suggest adding them to `DECISIONS.md` in its existing format: problem,
+options, decision, why, PM lesson.
+
 ## Folder structure
 - `data/raw/` — cached raw JSON pulled from the FPL API (gitignored, regenerable)
 - `data/processed/` — cleaned/derived data (gitignored, regenerable)
