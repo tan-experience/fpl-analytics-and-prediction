@@ -74,15 +74,19 @@ def get_fixtures() -> list:
     return _cached_get(f"{BASE_URL}/fixtures/", "fixtures")
 
 
-def get_player_summary(player_id: int) -> dict:
+def get_player_summary(player_id: int, max_age: int = 3600 * 6) -> dict:
     """
     One player's full history: past seasons, and this season's match-by-
     match performance (minutes, goals, points, etc).
+
+    Cached for 6 hours by default (history doesn't change mid-gameweek).
+    Bulk jobs like the backtest pass a longer max_age so re-running them
+    doesn't re-download hundreds of players.
     """
     return _cached_get(
         f"{BASE_URL}/element-summary/{player_id}/",
         f"player_summary_{player_id}",
-        max_age=3600 * 6,  # history doesn't change mid-gameweek; cache longer
+        max_age=max_age,
     )
 
 

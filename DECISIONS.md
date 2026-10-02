@@ -135,3 +135,39 @@ based on what will deliver visible value soonest — especially early, when
 proving the concept works matters more than following the original
 sequence — is a normal and healthy part of planning, as long as the reason
 for the reorder is recorded somewhere (like here).
+
+---
+
+## 2026-10 — Rank correlation, not average error, as the headline accuracy metric
+
+**Problem:** Built a backtest to measure how good the points projections
+are. The obvious metric, mean absolute error (MAE: "how many points off
+were we, on average"), declared the winner to be "predict 2 points for
+everyone" - beating the actual model (2.03 vs 2.34).
+
+**What happened:** FPL scores are heavily skewed - most players who play
+score 1-2 points, with occasional big hauls. MAE rewards always guessing
+the median (2), so a "model" with zero insight looks best. But it's useless
+for the real job: deciding *which* player to pick over another.
+
+**Options considered:**
+1. Keep MAE as the headline and try to beat the naive baseline on it
+2. Switch the headline to rank correlation (did we put players in the
+   right *order*?), keeping MAE as a secondary number
+
+**Decision:** Option 2. On 882 player-matches (GW3-5), the model's rank
+correlation is 0.32, vs 0.32 for plain form and an undefined score for the
+constant baseline. The fixture adjustment helps only marginally, and tuning
+its weight changed results within noise (0.316-0.324), so the weight stays
+at 0.15 until there's more data.
+
+**Why:** A metric should match the decision the product supports. FPL
+managers choose between players; they don't need exact point totals.
+
+**Also noted:** the API has no history of injury chances, so the backtest
+only scores matches the player actually played. It measures "how good is
+the projection, given they play", not "did we predict who'd play".
+
+**PM lesson:** Pick the success metric before celebrating or panicking
+about a number - the "obvious" metric can reward a useless answer. And
+don't tune on noise: a tiny improvement on a small sample isn't a result.

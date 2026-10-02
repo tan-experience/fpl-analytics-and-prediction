@@ -30,6 +30,17 @@ python -m src.cli --team <TEAM_ID> --out Palmer --in Saka
 
 Run `python -m src.cli --help` for all options.
 
+## How accurate is it?
+
+```bash
+python -m src.backtest
+```
+
+Replays past gameweeks: for each match a player has played, it projects their
+points using only data from before that match, then compares that to what
+they actually scored. Compares the model against simple baselines. See
+`DECISIONS.md` for why rank correlation is the headline metric.
+
 ## Check the data pipeline
 
 ```bash
