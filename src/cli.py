@@ -108,7 +108,7 @@ def show_squad_and_suggestions(team_id: int) -> None:
     print(f"\nProjected starting XI total: {total:.1f} points")
     print("(Proj = player's projection, Eff = after captain/bench multiplier)\n")
 
-    print("Transfer suggestions (underperforming + tough next-3-gameweek run):")
+    print("Transfer suggestions (starters not expected to play, or underperforming + tough run):")
     suggestions = suggest_transfers(team_id)
     if not suggestions:
         print("  Nothing flagged - your starters look fine on form and fixtures for now.")
@@ -117,7 +117,7 @@ def show_squad_and_suggestions(team_id: int) -> None:
     for i, s in enumerate(suggestions, start=1):
         gain = s["in_projected_points"] - s["out_projected_points"]
         print(f"  {i}. {s['out_name']} -> {s['in_name']}  "
-              f"(+{gain:.2f} pts, cost {_money(s['cost_diff'])})")
+              f"(+{gain:.2f} pts, cost {_money(s['cost_diff'])}) - {s['reason']}")
         print(f"     Try it: python -m src.cli --team {team_id} --out {s['out_id']} --in {s['in_id']}")
 
 

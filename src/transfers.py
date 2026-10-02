@@ -8,8 +8,9 @@ Two things live here:
    points impact BEFORE you make the real transfer on the FPL site.
 
 2. suggest_transfers() - scans your current starting XI for players worth
-   considering transferring out: ones that are both UNDERPERFORMING (below
-   the average projection for their position in your squad) AND facing a
+   considering transferring out: ones NOT EXPECTED TO PLAY (projected 0 -
+   injured, suspended, etc.), or ones both UNDERPERFORMING (below the
+   average projection for their position in your squad) AND facing a
    TOUGH RUN (hard fixtures over the next 3 gameweeks, not just the next
    one) - then finds an affordable, better-positioned replacement.
 
@@ -122,9 +123,9 @@ def simulate_transfer(team_id: int, out_player_id: int, in_player_id: int, gamew
 
 def suggest_transfers(team_id: int, gameweek: int = None, max_suggestions: int = 3) -> list:
     """
-    Flags starting players worth considering transferring out: ones both
-    underperforming for their position AND facing a tough 3-gameweek run,
-    then finds the best affordable same-position replacement.
+    Flags starting players worth considering transferring out: ones not
+    expected to play, or ones both underperforming for their position AND
+    facing a tough 3-gameweek run, then finds the best affordable same-position replacement.
 
     Returns a list of suggestion dicts, best first, each with the player ids
     so you can feed them straight into simulate_transfer() if you like one.
@@ -143,10 +144,19 @@ def suggest_transfers(team_id: int, gameweek: int = None, max_suggestions: int =
     starters = squad_with_fixtures[squad_with_fixtures["is_starting"]].copy()
     starters["position_avg_points"] = starters.groupby("position")["projected_points"].transform("mean")
 
-    flagged = starters[
+    # Two separate reasons to flag a starter:
+    # 1. Not expected to play at all (projection is 0 - injured, suspended,
+    #    or ruled out). This trumps everything: a player who won't play is
+    #    a problem no matter how easy their fixtures are.
+    # 2. Underperforming for their position AND facing a tough run.
+    not_playing = starters["projected_points"] <= 0
+    weak_and_tough_run = (
         (starters["next_3_avg_difficulty"] >= TOUGH_RUN_THRESHOLD)
         & (starters["projected_points"] < starters["position_avg_points"])
-    ]
+    )
+    flagged = starters[not_playing | weak_and_tough_run].copy()
+    flagged["reason"] = "tough run + below position average"
+    flagged.loc[not_playing, "reason"] = "not expected to play"
 
     squad_ids = set(squad_df["id"])
     suggestions = []
@@ -181,6 +191,7 @@ def suggest_transfers(team_id: int, gameweek: int = None, max_suggestions: int =
         best = candidates.sort_values("upgrade_score", ascending=False).iloc[0]
 
         suggestions.append({
+            "reason": weak["reason"],
             "out_id": int(weak["id"]),
             "out_name": weak["web_name"],
             "out_projected_points": round(weak["projected_points"], 2),
@@ -201,7 +212,7 @@ if __name__ == "__main__":
     TEAM_ID = 1524385
 
     print("Scanning your starting XI for transfer suggestions "
-          "(underperforming + tough next-3-gameweek run)...\n")
+          "(not playing, or underperforming + tough next-3-gameweek run)...\n")
     suggestions = suggest_transfers(TEAM_ID)
 
     if not suggestions:
