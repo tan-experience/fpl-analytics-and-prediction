@@ -15,7 +15,22 @@ source venv/bin/activate      # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Try it
+## Usage
+
+Find your team ID in the URL of your FPL "Points" page
+(`fantasy.premierleague.com/entry/<TEAM_ID>/event/...`), then:
+
+```bash
+# Your squad's projected points + suggested transfers
+python -m src.cli --team <TEAM_ID>
+
+# "What if" a specific transfer - player names or IDs both work
+python -m src.cli --team <TEAM_ID> --out Palmer --in Saka
+```
+
+Run `python -m src.cli --help` for all options.
+
+## Check the data pipeline
 
 ```bash
 python src/fetch.py
