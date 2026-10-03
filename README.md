@@ -62,7 +62,9 @@ cached the response to `data/raw/bootstrap_static.json`, and read it back.
 ## Every time you come back to this project
 
 ```bash
-source venv/bin/activate
+source venv/bin/activate      # Mac/Linux
+venv\Scripts\Activate.ps1     # Windows PowerShell
 ```
 (Re-activates the virtual environment — you'll need this each new terminal
-session.)
+session. Your prompt should start with `(venv)`. If you see
+`ModuleNotFoundError: No module named 'pandas'`, this step was missed.)
