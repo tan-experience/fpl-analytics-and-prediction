@@ -84,7 +84,8 @@ def build_player_features() -> pd.DataFrame:
     for p in bootstrap["elements"]:
         rows.append({
             "id": p["id"],
-            "web_name": p["web_name"],
+            "web_name": p["web_name"],  # short display name, e.g. "B.Fernandes"
+            "full_name": f"{p['first_name']} {p['second_name']}",  # e.g. "Bruno Borges Fernandes"
             "team": teams_by_id[p["team"]],
             "team_id": p["team"],
             "position": positions_by_id[p["element_type"]],

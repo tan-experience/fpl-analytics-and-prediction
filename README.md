@@ -28,7 +28,27 @@ python -m src.cli --team <TEAM_ID>
 python -m src.cli --team <TEAM_ID> --out Palmer --in Saka
 ```
 
+Replace `<TEAM_ID>` with your number, **without the angle brackets** - e.g.
+`python -m src.cli --team 1524385`.
+
+Player names can be the FPL display name (`B.Fernandes`), the full name
+(`"Bruno Fernandes"` - use quotes when there's a space), or part of a name
+(`Gibbs`). Capitals and accents don't matter. The tool always prints who it
+matched, so check that line - and if a name is ambiguous, it lists the
+options with their IDs.
+
 Run `python -m src.cli --help` for all options.
+
+## How accurate is it?
+
+```bash
+python -m src.backtest
+```
+
+Replays past gameweeks: for each match a player has played, it projects their
+points using only data from before that match, then compares that to what
+they actually scored. Compares the model against simple baselines. See
+`DECISIONS.md` for why rank correlation is the headline metric.
 
 ## Check the data pipeline
 
@@ -51,7 +71,9 @@ cached the response to `data/raw/bootstrap_static.json`, and read it back.
 ## Every time you come back to this project
 
 ```bash
-source venv/bin/activate
+source venv/bin/activate      # Mac/Linux
+venv\Scripts\Activate.ps1     # Windows PowerShell
 ```
 (Re-activates the virtual environment — you'll need this each new terminal
-session.)
+session. Your prompt should start with `(venv)`. If you see
+`ModuleNotFoundError: No module named 'pandas'`, this step was missed.)
