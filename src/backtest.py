@@ -78,6 +78,35 @@ def _load_histories(player_ids: list) -> list:
     return rows
 
 
+def add_before_match_features(history: pd.DataFrame) -> pd.DataFrame:
+    """
+    Given match rows (columns: element, kickoff_time, total_points), adds
+    what we'd have known BEFORE each match:
+      - form_before: average points over the previous FORM_WINDOW matches
+      - season_avg_before: average points over all previous matches
+      - prior_matches: how many matches the player had already played
+    A player's first match has no history, so its averages are missing (NaN).
+
+    Kept separate from the downloading code so it can be tested on a small
+    hand-made table - this is the part that must never "leak" the result
+    we're trying to predict.
+    """
+    history = history.sort_values(["element", "kickoff_time"]).reset_index(drop=True)
+
+    # For each player, look only at earlier rows. shift(1) moves every value
+    # down one row, so each match sees only the matches before it - this is
+    # what prevents "leakage" of the result we're trying to predict.
+    by_player = history.groupby("element")["total_points"]
+    history["form_before"] = by_player.transform(
+        lambda pts: pts.shift(1).rolling(FORM_WINDOW, min_periods=1).mean()
+    )
+    history["season_avg_before"] = by_player.transform(
+        lambda pts: pts.shift(1).expanding().mean()
+    )
+    history["prior_matches"] = history.groupby("element").cumcount()
+    return history
+
+
 def build_backtest_table() -> pd.DataFrame:
     """
     Builds one row per (player, past match) with:
@@ -95,21 +124,7 @@ def build_backtest_table() -> pd.DataFrame:
     players = [p for p in bootstrap["elements"] if p["minutes"] > 0]
     print(f"Loading match history for {len(players)} players "
           f"(first run downloads them; later runs use the cache)...")
-    history = pd.DataFrame(_load_histories([p["id"] for p in players]))
-
-    history = history.sort_values(["element", "kickoff_time"]).reset_index(drop=True)
-
-    # For each player, look only at earlier rows. shift(1) moves every value
-    # down one row, so each match sees only the matches before it - this is
-    # what prevents "leakage" of the result we're trying to predict.
-    by_player = history.groupby("element")["total_points"]
-    history["form_before"] = by_player.transform(
-        lambda pts: pts.shift(1).rolling(FORM_WINDOW, min_periods=1).mean()
-    )
-    history["season_avg_before"] = by_player.transform(
-        lambda pts: pts.shift(1).expanding().mean()
-    )
-    history["prior_matches"] = history.groupby("element").cumcount()
+    history = add_before_match_features(pd.DataFrame(_load_histories([p["id"] for p in players])))
 
     # Difficulty from the player's own team's point of view.
     def _difficulty(row):

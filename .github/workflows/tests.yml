@@ -1,0 +1,28 @@
+# GitHub Actions: runs the test suite automatically on GitHub's servers.
+# - On every pull request, so a PR shows a green tick (or red cross) before merging.
+# - On every push to main, to confirm main itself is always working.
+# Tests never call the real FPL API, so they don't depend on the internet
+# or on what week of the season it is.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"  # same version as the local venv
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -v
