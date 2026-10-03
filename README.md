@@ -28,6 +28,9 @@ python -m src.cli --team <TEAM_ID>
 python -m src.cli --team <TEAM_ID> --out Palmer --in Saka
 ```
 
+Replace `<TEAM_ID>` with your number, **without the angle brackets** - e.g.
+`python -m src.cli --team 1524385`.
+
 Run `python -m src.cli --help` for all options.
 
 ## How accurate is it?
