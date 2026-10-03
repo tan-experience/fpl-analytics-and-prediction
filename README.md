@@ -31,6 +31,12 @@ python -m src.cli --team <TEAM_ID> --out Palmer --in Saka
 Replace `<TEAM_ID>` with your number, **without the angle brackets** - e.g.
 `python -m src.cli --team 1524385`.
 
+Player names can be the FPL display name (`B.Fernandes`), the full name
+(`"Bruno Fernandes"` - use quotes when there's a space), or part of a name
+(`Gibbs`). Capitals and accents don't matter. The tool always prints who it
+matched, so check that line - and if a name is ambiguous, it lists the
+options with their IDs.
+
 Run `python -m src.cli --help` for all options.
 
 ## How accurate is it?

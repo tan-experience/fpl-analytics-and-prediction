@@ -7,8 +7,9 @@ calling functions by hand, you run one command from the project root:
     python -m src.cli --team 1524385
         -> your squad's projected points + top transfer suggestions
 
-    python -m src.cli --team 1524385 --out Salah --in Palmer
-        -> "what if" a specific transfer (names or player IDs both work)
+    python -m src.cli --team 1524385 --out Palmer --in "Bukayo Saka"
+        -> "what if" a specific transfer (display names, full names,
+           part of a name, or player IDs all work)
 
 Beginner notes:
 - `argparse` is Python's built-in tool for reading command-line options
@@ -20,6 +21,7 @@ Beginner notes:
 """
 
 import argparse
+import unicodedata
 import sys
 
 from src.features import build_player_features
@@ -42,12 +44,38 @@ def _money(value: float) -> str:
     return f"{'-' if value < 0 else '+'}£{abs(value):.1f}m"
 
 
+def _describe(player) -> str:
+    """
+    One-line description of a player, e.g.
+    "Fernandes (Mateus Fernandes, Sunderland, MID, £5.0m)".
+    Shown whenever we pick a player from a typed name, so a wrong match is
+    obvious instead of silently simulated.
+    """
+    return (f"{player.web_name} ({player.full_name}, {player.team}, "
+            f"{player.position}, £{player.now_cost}m)")
+
+
+def _normalise(text: str) -> str:
+    """
+    Lowercases and strips accents, so "João" and "joao" compare as equal.
+    (unicodedata splits "ã" into "a" + a separate accent mark; we then drop
+    the accent marks.)
+    """
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).lower()
+
+
 def _resolve_player(value: str, projections, prefer_ids=None) -> int:
     """
     Turns what the user typed after --out / --in into a player ID.
 
-    Accepts either a number (used as the ID directly) or a name like
-    "Salah" (matched case-insensitively against FPL's short display name).
+    Accepts a number (used as the ID directly) or a name, matched against
+    both FPL's short display name ("B.Fernandes") and the player's full
+    name ("Bruno Borges Fernandes"), ignoring capitals and accents:
+      1. An exact match on either name wins.
+      2. Otherwise, a player matches if EVERY word typed appears somewhere
+         in their names - so "Bruno Fernandes" finds "Bruno Borges
+         Fernandes", and "Gibbs" finds "Gibbs-White".
     If a name matches several players, we stop and list them, rather than
     guessing - picking the wrong player silently would be worse than asking.
 
@@ -65,18 +93,24 @@ def _resolve_player(value: str, projections, prefer_ids=None) -> int:
         except ValueError:
             pass  # Not found in the preferred pool - fall back to everyone.
 
-    matches = projections[projections["web_name"].str.lower() == value.lower()]
+    query = _normalise(value.strip())
+    short_names = projections["web_name"].map(_normalise)
+    full_names = projections["full_name"].map(_normalise)
+
+    # Step 1: exact match on either name.
+    matches = projections[(short_names == query) | (full_names == query)]
+
+    # Step 2: every typed word appears in the player's names.
     if matches.empty:
-        # No exact match - try "contains" so "Alexander" finds "Alexander-Arnold".
-        matches = projections[projections["web_name"].str.lower().str.contains(value.lower(), regex=False)]
+        searchable = short_names + " " + full_names
+        words = query.split()
+        has_all_words = searchable.map(lambda names: all(w in names for w in words))
+        matches = projections[has_all_words]
 
     if matches.empty:
         raise ValueError(f"No player found matching '{value}'.")
     if len(matches) > 1:
-        options = "\n".join(
-            f"  {row.id}: {row.web_name} ({row.position}, £{row.now_cost}m)"
-            for row in matches.itertuples()
-        )
+        options = "\n".join(f"  {row.id}: {_describe(row)}" for row in matches.itertuples())
         raise ValueError(f"'{value}' matches several players - use an ID instead:\n{options}")
 
     return int(matches.iloc[0]["id"])
@@ -128,10 +162,19 @@ def show_what_if(team_id: int, out_value: str, in_value: str) -> None:
     out_id = _resolve_player(out_value, projections, prefer_ids=set(squad_df["id"]))
     in_id = _resolve_player(in_value, projections)
 
+    # Spell out exactly who was matched BEFORE simulating, so a wrong pick is
+    # easy to spot - even if the swap then fails (e.g. over budget).
+    players = projections.set_index("id")
+    for player_id in (out_id, in_id):
+        if player_id not in players.index:  # only possible when an ID was typed
+            raise ValueError(f"Player id {player_id} not found.")
+    print("What if:")
+    print(f"  OUT: {_describe(players.loc[out_id])}")
+    print(f"  IN:  {_describe(players.loc[in_id])}\n")
+    sys.stdout.flush()  # make sure these lines appear before any error message
+
     result = simulate_transfer(team_id, out_player_id=out_id, in_player_id=in_id)
 
-    names = projections.set_index("id")["web_name"]
-    print(f"What if: {names[out_id]} -> {names[in_id]}\n")
     print(f"  Starting XI projection: {result['old_starting_total']:.2f} -> "
           f"{result['new_starting_total']:.2f}  ({result['projected_gain']:+.2f} pts)")
     print(f"  Cost difference: {_money(result['cost_diff'])}, "
