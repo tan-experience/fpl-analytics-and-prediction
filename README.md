@@ -1,21 +1,121 @@
-# FPL Analytics Project
+# FPL Analytics
 
-A personal Fantasy Premier League tool — player points projections, match
-predictions, and team/transfer analysis. See `CLAUDE.md` for the full plan.
+[![tests](https://github.com/tan-experience/fpl-analytics-and-prediction/actions/workflows/tests.yml/badge.svg)](https://github.com/tan-experience/fpl-analytics-and-prediction/actions/workflows/tests.yml)
 
-## First-time setup
+**Enter your Fantasy Premier League team ID → see your squad's projected
+points, which players to transfer out, and the impact of any transfer
+you're considering - before you make it.**
+
+Built on the official FPL API (no login needed - your team ID is all it
+takes), with a backtest that measures how accurate the projections really
+are, and a [decision log](DECISIONS.md) explaining the product trade-offs
+behind it.
+
+> **Status:** working command-line tool. A web app (Streamlit) is next, so
+> it can be used without installing anything.
+
+---
+
+## What it does
+
+**1. Projects your squad and flags transfers** (output trimmed):
+
+```
+Starting XI:
+         Player Pos  Price  Proj   Eff
+    Haaland (C) FWD   15.6  7.85 15.70
+           Groß MID    5.9 10.70 10.70
+         Schade MID    6.2  8.70  8.70
+            ...
+         Palmer MID    9.7  0.00  0.00
+
+Projected starting XI total: 64.9 points
+
+Transfer suggestions (starters not expected to play, or underperforming + tough run):
+  1. Palmer -> Barnes  (+7.85 pts, cost -£3.6m) - not expected to play
+  2. Calvert-Lewin -> Kostoulas  (+3.30 pts, cost -£0.4m) - tough run + below position average
+```
+
+**2. Tests a transfer idea before you commit to it** - checks it's legal
+(same position, affordable) and shows the projected impact:
+
+```
+What if:
+  OUT: Palmer (Cole Palmer, Chelsea, MID, £9.7m)
+  IN:  Saka (Bukayo Saka, Arsenal, MID, £9.5m)
+
+  Starting XI projection: 64.95 -> 68.95  (+4.00 pts)
+  Cost difference: -£0.2m, leaving £2.2m in the bank
+```
+
+## How good are the projections?
+
+Measured, not assumed. The backtest replays past gameweeks, projects every
+match using **only data available before it**, and compares against what
+players actually scored:
+
+| Approach | Rank correlation ↑ |
+|---|---|
+| **This model** (recent form + fixture difficulty) | **0.321** |
+| Recent form only | 0.316 |
+| Season average | 0.316 |
+
+*882 player-matches, gameweeks 3–5 of 2026/27. Rank correlation measures
+whether players were put in the right order (1 = perfect, 0 = random) -
+the question FPL decisions actually depend on.*
+
+**Honest read:** the model ranks players meaningfully better than chance,
+but the fixture-difficulty adjustment adds very little over form alone.
+That's the weakness the next phase targets.
+
+## Product decisions
+
+The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights:
+
+- **Simple baseline before machine learning** - without a baseline, there's
+  no way to show a complex model is actually better.
+- **Rank correlation, not average error** - the "obvious" metric declared
+  "predict 2 points for everyone" the winner. A metric has to match the
+  decision the product supports.
+- **Respecting a platform constraint** - FPL hides pending transfers
+  deliberately; rather than work around it with stored passwords, the tool
+  offers a what-if simulator instead.
+- **Reordering the roadmap** for visible value sooner - and recording why.
+
+## Roadmap
+
+- [x] Data pipeline from the official FPL API, with caching
+- [x] Points projection (heuristic baseline)
+- [x] Squad import, transfer suggestions, what-if simulator
+- [x] Command-line interface
+- [x] Backtest + automated tests in CI
+- [ ] **Web app (Streamlit)** - usable in a browser, no install
+- [ ] Match/goals prediction (Poisson model) to replace the coarse 1–5
+      fixture difficulty - target: beat 0.321 rank correlation
+- [ ] Machine-learning projection, compared against the baseline
+
+---
+
+## Run it yourself
+
+Tested with Python 3.12.
 
 ```bash
-# 1. Create and activate a virtual environment (keeps dependencies isolated
-#    from the rest of your system)
-python3 -m venv venv
-source venv/bin/activate      # on Windows: venv\Scripts\activate
+git clone https://github.com/tan-experience/fpl-analytics-and-prediction.git
+cd fpl-analytics-and-prediction
 
-# 2. Install dependencies
+python -m venv venv
+source venv/bin/activate      # Mac/Linux
+venv\Scripts\Activate.ps1     # Windows PowerShell
+
 pip install -r requirements.txt
 ```
 
-## Usage
+Each new terminal session, re-activate the virtual environment with the
+`activate` line above - your prompt should start with `(venv)`. If you see
+`ModuleNotFoundError: No module named 'pandas'`, that step was missed.
+
+### Usage
 
 Find your team ID in the URL of your FPL "Points" page
 (`fantasy.premierleague.com/entry/<TEAM_ID>/event/...`), then:
@@ -24,66 +124,58 @@ Find your team ID in the URL of your FPL "Points" page
 # Your squad's projected points + suggested transfers
 python -m src.cli --team <TEAM_ID>
 
-# "What if" a specific transfer - player names or IDs both work
-python -m src.cli --team <TEAM_ID> --out Palmer --in Saka
-```
+# "What if" a specific transfer
+python -m src.cli --team <TEAM_ID> --out Palmer --in "Bukayo Saka"
 
-Replace `<TEAM_ID>` with your number, **without the angle brackets** - e.g.
-`python -m src.cli --team 1524385`.
-
-Player names can be the FPL display name (`B.Fernandes`), the full name
-(`"Bruno Fernandes"` - use quotes when there's a space), or part of a name
-(`Gibbs`). Capitals and accents don't matter. The tool always prints who it
-matched, so check that line - and if a name is ambiguous, it lists the
-options with their IDs.
-
-Run `python -m src.cli --help` for all options.
-
-## How accurate is it?
-
-```bash
+# How accurate are the projections?
 python -m src.backtest
 ```
 
-Replays past gameweeks: for each match a player has played, it projects their
-points using only data from before that match, then compares that to what
-they actually scored. Compares the model against simple baselines. See
-`DECISIONS.md` for why rank correlation is the headline metric.
+Replace `<TEAM_ID>` with your number, **without the angle brackets** (e.g.
+`--team 1234567`).
 
-## Running the tests
+Player names can be the FPL display name (`B.Fernandes`), the full name
+(`"Bruno Fernandes"` - quotes when there's a space), or part of a name
+(`Gibbs`). Capitals and accents don't matter. The tool always prints who it
+matched, and if a name is ambiguous it lists the options with their IDs.
+
+### Tests
 
 ```bash
 pytest
 ```
 
-Runs the automated checks in `tests/` (about a second, no internet needed - they
-use small made-up player tables, not the live FPL API). The same tests run
-automatically on GitHub for every pull request.
+33 offline tests using small made-up player tables (no internet needed).
+They run automatically on GitHub for every pull request - including checks
+that the backtest never "peeks" at results it's trying to predict.
 
-## Check the data pipeline
-
-```bash
-python src/fetch.py
-```
-
-You should see something like:
+### Project structure
 
 ```
-Season data loaded successfully.
-Total players: 700+
-Total teams: 20
-Current gameweek: Gameweek 5 (id=5)
+src/
+  fetch.py       all FPL API calls, cached to data/raw/
+  features.py    raw data -> per-player features (form, fixture difficulty)
+  models.py      points projection formula
+  team.py        import a squad by team ID
+  transfers.py   transfer suggestions + what-if simulator
+  backtest.py    accuracy measurement against past gameweeks
+  cli.py         command-line interface
+tests/           automated tests
+DECISIONS.md     product decision log
 ```
 
-This confirms the data pipeline works end to end: it hit the live FPL API,
-cached the response to `data/raw/bootstrap_static.json`, and read it back.
+### Known limitations
 
-## Every time you come back to this project
+- Projections are a transparent heuristic, not a trained model (yet).
+- Sell prices are assumed equal to current prices; FPL's real profit-sharing
+  rule is slightly different.
+- Uses your squad as of the last deadline - FPL's public API doesn't expose
+  transfers you've made since.
 
-```bash
-source venv/bin/activate      # Mac/Linux
-venv\Scripts\Activate.ps1     # Windows PowerShell
-```
-(Re-activates the virtual environment — you'll need this each new terminal
-session. Your prompt should start with `(venv)`. If you see
-`ModuleNotFoundError: No module named 'pandas'`, this step was missed.)
+---
+
+Built as a learning and portfolio project, with AI pair-programming
+([Claude Code](https://claude.com/claude-code)). Not affiliated with the
+Premier League or Fantasy Premier League.
+
+Licensed under the [MIT License](LICENSE).
