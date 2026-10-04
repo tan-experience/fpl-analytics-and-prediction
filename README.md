@@ -50,6 +50,16 @@ points using only data from before that match, then compares that to what
 they actually scored. Compares the model against simple baselines. See
 `DECISIONS.md` for why rank correlation is the headline metric.
 
+## Running the tests
+
+```bash
+pytest
+```
+
+Runs the automated checks in `tests/` (about a second, no internet needed - they
+use small made-up player tables, not the live FPL API). The same tests run
+automatically on GitHub for every pull request.
+
 ## Check the data pipeline
 
 ```bash
