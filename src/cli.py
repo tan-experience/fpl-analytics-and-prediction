@@ -4,10 +4,10 @@ cli.py
 The command-line front door to the project. Instead of opening Python and
 calling functions by hand, you run one command from the project root:
 
-    python -m src.cli --team 1524385
+    python -m src.cli --team <TEAM_ID>
         -> your squad's projected points + top transfer suggestions
 
-    python -m src.cli --team 1524385 --out Palmer --in "Bukayo Saka"
+    python -m src.cli --team <TEAM_ID> --out Palmer --in "Bukayo Saka"
         -> "what if" a specific transfer (display names, full names,
            part of a name, or player IDs all work)
 
