@@ -6,13 +6,15 @@
 points, which players to transfer out, and the impact of any transfer
 you're considering - before you make it.**
 
+### [▶ Try it live](https://fpl-analytics-and-prediction.streamlit.app/) - no install, just your team ID
+
 Built on the official FPL API (no login needed - your team ID is all it
 takes), with a backtest that measures how accurate the projections really
 are, and a [decision log](DECISIONS.md) explaining the product trade-offs
 behind it.
 
-> **Status:** work in progress. Working command-line tool and web app
-> (Streamlit); a public link is coming soon.
+> **Status:** work in progress, [live on the web](https://fpl-analytics-and-prediction.streamlit.app/). Projections are a
+> simple baseline for now - a better model is next on the roadmap.
 
 ---
 
@@ -94,8 +96,8 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
 - [x] Command-line interface
 - [x] Backtest + automated tests in CI
 - [x] Web app (Streamlit)
-- [ ] **Public deployment** - usable in a browser, no install
-- [ ] Match/goals prediction (Poisson model) to replace the coarse 1–5
+- [x] [Public deployment](https://fpl-analytics-and-prediction.streamlit.app/) - usable in a browser, no install
+- [ ] **Match/goals prediction** (Poisson model) to replace the coarse 1–5
       fixture difficulty - target: beat 0.321 rank correlation
 - [ ] Machine-learning projection, compared against the baseline
 
