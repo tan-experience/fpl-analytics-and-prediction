@@ -11,8 +11,8 @@ takes), with a backtest that measures how accurate the projections really
 are, and a [decision log](DECISIONS.md) explaining the product trade-offs
 behind it.
 
-> **Status:** working command-line tool. A web app (Streamlit) is next, so
-> it can be used without installing anything.
+> **Status:** work in progress. Working command-line tool and web app
+> (Streamlit); a public link is coming soon.
 
 ---
 
@@ -89,7 +89,8 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
 - [x] Squad import, transfer suggestions, what-if simulator
 - [x] Command-line interface
 - [x] Backtest + automated tests in CI
-- [ ] **Web app (Streamlit)** - usable in a browser, no install
+- [x] Web app (Streamlit)
+- [ ] **Public deployment** - usable in a browser, no install
 - [ ] Match/goals prediction (Poisson model) to replace the coarse 1–5
       fixture difficulty - target: beat 0.321 rank correlation
 - [ ] Machine-learning projection, compared against the baseline
@@ -129,6 +130,9 @@ python -m src.cli --team <TEAM_ID> --out Palmer --in "Bukayo Saka"
 
 # How accurate are the projections?
 python -m src.backtest
+
+# The web app, in your browser (opens http://localhost:8501)
+streamlit run app.py
 ```
 
 Replace `<TEAM_ID>` with your number, **without the angle brackets** (e.g.
@@ -145,7 +149,7 @@ matched, and if a name is ambiguous it lists the options with their IDs.
 pytest
 ```
 
-33 offline tests using small made-up player tables (no internet needed).
+35 offline tests using small made-up player tables (no internet needed).
 They run automatically on GitHub for every pull request - including checks
 that the backtest never "peeks" at results it's trying to predict.
 
@@ -160,6 +164,7 @@ src/
   transfers.py   transfer suggestions + what-if simulator
   backtest.py    accuracy measurement against past gameweeks
   cli.py         command-line interface
+app.py           web app (Streamlit)
 tests/           automated tests
 DECISIONS.md     product decision log
 ```

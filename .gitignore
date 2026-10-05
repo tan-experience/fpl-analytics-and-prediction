@@ -8,3 +8,6 @@ __pycache__/
 # Cached API data - regenerable, don't need to be in git
 data/raw/
 data/processed/
+
+# Local Claude Code tooling (dev-server preview config)
+.claude/
