@@ -209,7 +209,7 @@ def suggest_transfers(team_id: int, gameweek: int = None, max_suggestions: int =
 
 if __name__ == "__main__":
     # Manual test: run `python -m src.transfers` from the project root.
-    TEAM_ID = 1524385
+    TEAM_ID = 895045  # example: overall FPL leader after GW5 - swap in your own ID
 
     print("Scanning your starting XI for transfer suggestions "
           "(not playing, or underperforming + tough next-3-gameweek run)...\n")

@@ -96,7 +96,7 @@ def get_squad_projection(team_id: int, gameweek: int = None) -> pd.DataFrame:
 if __name__ == "__main__":
     # Manual test: run `python -m src.team` from the project root.
     # Change TEAM_ID below to project any manager's squad.
-    TEAM_ID = 1524385
+    TEAM_ID = 895045  # example: overall FPL leader after GW5 - swap in your own ID
 
     squad_df, gameweek = get_squad_projection(TEAM_ID)
     starting_total = squad_df.loc[squad_df["is_starting"], "effective_points"].sum()

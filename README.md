@@ -18,22 +18,22 @@ behind it.
 
 ## What it does
 
-**1. Projects your squad and flags transfers** (output trimmed):
+**1. Projects your squad and flags transfers** - shown here for the overall
+FPL leader's squad after Gameweek 5 (output trimmed):
 
 ```
 Starting XI:
          Player Pos  Price  Proj   Eff
-    Haaland (C) FWD   15.6  7.85 15.70
-           Groß MID    5.9 10.70 10.70
-         Schade MID    6.2  8.70  8.70
+    Haaland (C) FWD   15.6  7.35 14.70
+      Tarkowski DEF    6.2  8.45  8.45
+           Hall DEF    5.3  6.65  6.65
             ...
          Palmer MID    9.7  0.00  0.00
 
-Projected starting XI total: 64.9 points
+Projected starting XI total: 52.2 points
 
 Transfer suggestions (starters not expected to play, or underperforming + tough run):
-  1. Palmer -> Barnes  (+7.85 pts, cost -£3.6m) - not expected to play
-  2. Calvert-Lewin -> Kostoulas  (+3.30 pts, cost -£0.4m) - tough run + below position average
+  1. Palmer -> Groß  (+15.50 pts, cost -£3.8m) - not expected to play
 ```
 
 **2. Tests a transfer idea before you commit to it** - checks it's legal
@@ -42,10 +42,10 @@ Transfer suggestions (starters not expected to play, or underperforming + tough 
 ```
 What if:
   OUT: Palmer (Cole Palmer, Chelsea, MID, £9.7m)
-  IN:  Saka (Bukayo Saka, Arsenal, MID, £9.5m)
+  IN:  Mbeumo (Bryan Mbeumo, Man Utd, MID, £7.9m)
 
-  Starting XI projection: 64.95 -> 68.95  (+4.00 pts)
-  Cost difference: -£0.2m, leaving £2.2m in the bank
+  Starting XI projection: 52.25 -> 56.40  (+4.15 pts)
+  Cost difference: -£1.8m, leaving £1.9m in the bank
 ```
 
 ## How good are the projections?
