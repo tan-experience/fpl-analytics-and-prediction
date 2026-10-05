@@ -81,6 +81,10 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
   deliberately; rather than work around it with stored passwords, the tool
   offers a what-if simulator instead.
 - **Reordering the roadmap** for visible value sooner - and recording why.
+- **Web app before a better model** - once the audience included people
+  without a terminal, usability mattered more than accuracy gains; the
+  riskiest assumption (FPL allowing cloud requests) was tested with a
+  throwaway deploy first.
 
 ## Roadmap
 
