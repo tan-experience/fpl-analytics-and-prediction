@@ -171,3 +171,41 @@ the projection, given they play", not "did we predict who'd play".
 **PM lesson:** Pick the success metric before celebrating or panicking
 about a number - the "obvious" metric can reward a useless answer. And
 don't tune on noise: a tiny improvement on a small sample isn't a result.
+
+---
+
+## 2026-10 — Web app before better predictions (Phase 5 ahead of Phase 3)
+
+**Problem:** With a working command-line tool, a measured baseline and
+tests in place, the next step could be either a better model (Phase 3:
+predicting goals per match) or a web app (Phase 5).
+
+**Options considered:**
+1. Phase 3 first - improve accuracy, then build the interface once the
+   model settles
+2. Web app first - make the existing tool usable by anyone, then improve
+   the model inside a product people can already try
+
+**Decision:** Option 2.
+
+**Why:** The intended user changed. Until now the user was the builder,
+comfortable in a terminal. As a public portfolio piece, the user is also a
+recruiter or FPL player with about a minute and no Python installed - and
+for them, a repo they'd have to clone and set up is effectively unusable,
+however accurate the model. Two setup mistakes made during this project
+(a missed virtual-environment step, and typing a `<TEAM_ID>` placeholder
+literally) showed how easily a terminal tool loses people. The backtest
+also showed the current model is only modestly better than form alone, so
+a Phase 3 gain would be invisible to anyone who couldn't run it.
+
+**De-risking first:** The plan depended on one untested assumption - that
+the FPL API accepts requests from Streamlit Community Cloud's servers (some
+sites block cloud hosts). Before merging, the app was deployed from its
+feature branch as a test; a real squad loaded, confirming the simple
+architecture works. Had it failed, the fallback was fetching data on a
+schedule via GitHub Actions - a different design, better found out early.
+
+**PM lesson:** "Who is the user?" is worth re-asking whenever the context
+changes - a tool that's complete for its builder can be unusable for its
+real audience. And when a plan rests on one risky assumption, test that
+assumption cheaply before building on it.
