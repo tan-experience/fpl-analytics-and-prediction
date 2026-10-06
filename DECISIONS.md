@@ -209,3 +209,46 @@ schedule via GitHub Actions - a different design, better found out early.
 changes - a tool that's complete for its builder can be unusable for its
 real audience. And when a plan rests on one risky assumption, test that
 assumption cheaply before building on it.
+
+---
+
+## 2026-10 — Adding last season's results to judge team strength (Phase 3)
+
+**Problem:** Phase 3 rates each team's attack and defence to predict goals
+in each match. Five gameweeks in, the FPL API has only 50 finished
+matches - five per team - and one freak result can dominate that.
+
+**Options considered:**
+1. This season only (FPL API) - simplest, no new data source, but very
+   noisy until well into the season
+2. Add last season's 380 results from football-data.co.uk (a free CSV, no
+   account or key), with older matches counting less (half weight every
+   120 days) and promoted teams starting at the relegated teams' average
+3. Use FPL's built-in team strength ratings - no fitting, but opaque, and
+   likely the same basis as the 1-5 difficulty rating that the player
+   backtest showed adds little
+
+**Decision:** Option 2.
+
+**Why - and the evidence:** Predicting each team's goals in gameweeks 2-5
+(only using matches before each gameweek):
+
+| Approach | Rank correlation |
+|---|---|
+| Model, last season + this season | 0.205 |
+| Model, this season only | 0.046 |
+| FPL 1-5 difficulty | 0.021 |
+
+FPL's difficulty rating is barely better than random at predicting goals -
+which explains why it added so little to player projections. And the model
+only works once last season is included. Small sample (80 team-matches),
+so treat the exact numbers as a first read.
+
+**Trade-off accepted:** a second data source (and a team-name mapping
+between the two: "Man United"/"Man Utd", "Tottenham"/"Spurs" - checked
+automatically, so a mismatch can't silently split one club into two).
+
+**PM lesson:** When early data is thin, borrow context - but let it fade
+as your own data accumulates. And test the decision, not just the model:
+running the "this season only" option alongside turned a judgement call
+into evidence.

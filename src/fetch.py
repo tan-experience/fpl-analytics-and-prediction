@@ -95,6 +95,34 @@ def get_player_summary(player_id: int, max_age: int = 3600 * 6) -> dict:
     )
 
 
+def get_last_season_results() -> str:
+    """
+    Last season's Premier League results (2025/26) as CSV text, from
+    football-data.co.uk - a free, long-running football results site. The
+    FPL API only covers the current season, and a few weeks of matches is
+    too little to judge team strength, so we add last season for context.
+
+    Cached for 30 days: a finished season's results don't change.
+    Columns we use: Date (dd/mm/yyyy), HomeTeam, AwayTeam, FTHG, FTAG
+    (full-time home/away goals).
+    """
+    cache_path = RAW_DATA_DIR / "football_data_2526_E0.csv"
+    if cache_path.exists() and time.time() - cache_path.stat().st_mtime < 3600 * 24 * 30:
+        return cache_path.read_text(encoding="utf-8")
+
+    response = requests.get(
+        "https://www.football-data.co.uk/mmz4281/2526/E0.csv",
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    response.raise_for_status()
+    text = response.content.decode("utf-8-sig")  # "-sig" strips an invisible marker some CSVs start with
+
+    temp_path = cache_path.with_suffix(f".{os.getpid()}.tmp")
+    temp_path.write_text(text, encoding="utf-8")
+    os.replace(temp_path, cache_path)
+    return text
+
+
 def get_entry(team_id: int) -> dict:
     """
     Basic info about a manager's team (name, overall rank, total points).
