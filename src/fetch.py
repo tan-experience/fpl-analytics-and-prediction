@@ -55,8 +55,13 @@ def _cached_get(url: str, cache_key: str, max_age: int = CACHE_MAX_AGE_SECONDS) 
     response.raise_for_status()  # raises an error if the request failed
     data = response.json()
 
-    with open(cache_path, "w") as f:
+    # Write to a temporary file first, then swap it into place in one step.
+    # On the web app, two visitors can load at the same moment - this stops
+    # one of them reading a half-written cache file.
+    temp_path = cache_path.with_suffix(f".{os.getpid()}.tmp")
+    with open(temp_path, "w") as f:
         json.dump(data, f)
+    os.replace(temp_path, cache_path)
 
     return data
 
