@@ -59,10 +59,17 @@ def simulate_transfer(team_id: int, out_player_id: int, in_player_id: int, gamew
     projections = project_gameweek_points(build_player_features())
     proj_by_id = projections.set_index("id")
 
+    def _name(player_id: int) -> str:
+        """A player's display name for error messages, falling back to the ID
+        only if the player doesn't exist at all."""
+        if player_id in proj_by_id.index:
+            return proj_by_id.loc[player_id, "web_name"]
+        return f"Player id {player_id}"
+
     if out_player_id not in squad_df["id"].values:
-        raise ValueError(f"Player id {out_player_id} isn't in this squad.")
+        raise ValueError(f"{_name(out_player_id)} isn't in this squad.")
     if in_player_id in squad_df["id"].values:
-        raise ValueError(f"Player id {in_player_id} is already in this squad.")
+        raise ValueError(f"{_name(in_player_id)} is already in this squad.")
     if in_player_id not in proj_by_id.index:
         raise ValueError(f"Player id {in_player_id} not found.")
 

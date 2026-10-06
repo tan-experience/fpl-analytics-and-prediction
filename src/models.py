@@ -66,6 +66,11 @@ def project_gameweek_points(df: pd.DataFrame) -> pd.DataFrame:
         df["form"] + df["fixture_adjustment"]
     )
 
+    # Never project below 0. A player with no form facing a hard fixture
+    # would otherwise come out slightly negative (e.g. -0.15) - but a tough
+    # opponent alone shouldn't predict a player LOSING points.
+    df["projected_points"] = df["projected_points"].clip(lower=0)
+
     # Players marked unavailable (injured/suspended/left the club) shouldn't
     # show a meaningful projection regardless of stale form numbers.
     df.loc[df["status"] != "a", "projected_points"] = 0.0

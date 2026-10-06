@@ -75,6 +75,11 @@ def test_project_formula():
     assert project(form, pd.Series([5]), weight=0.5).iloc[0] == 3.0
 
 
+def test_project_never_negative():
+    # Same floor at 0 as models.py, so the backtest measures the real formula.
+    assert project(pd.Series([0.0]), pd.Series([5]), weight=0.5).iloc[0] == 0.0
+
+
 def test_score_perfect_order_and_error():
     table = pd.DataFrame({"gameweek": [1, 1, 1], "actual_points": [1, 5, 9]})
     result = score(pd.Series([2, 6, 10]), table)
