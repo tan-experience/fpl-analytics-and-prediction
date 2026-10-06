@@ -99,6 +99,12 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
 - [x] [Public deployment](https://fpl-analytics-and-prediction.streamlit.app/) - usable in a browser, no install
 - [ ] **Match/goals prediction** (Poisson model) to replace the coarse 1–5
       fixture difficulty - target: beat 0.321 rank correlation
+  - [x] Team attack/defence ratings and expected goals per match
+        (`python -m src.team_strength`) - predicts team goals far better
+        than FPL's difficulty rating (0.21 vs 0.02 rank correlation)
+  - [ ] Clean-sheet probability for defenders and goalkeepers
+  - [ ] Each player's share of their team's attack
+  - [ ] Combine into expected points; backtest against the baseline
 - [ ] Machine-learning projection, compared against the baseline
 
 ---
@@ -169,6 +175,7 @@ src/
   team.py        import a squad by team ID
   transfers.py   transfer suggestions + what-if simulator
   backtest.py    accuracy measurement against past gameweeks
+  team_strength.py  team attack/defence ratings, expected goals per match
   cli.py         command-line interface
 app.py           web app (Streamlit)
 tests/           automated tests
