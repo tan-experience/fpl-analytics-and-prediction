@@ -40,6 +40,13 @@ def test_projection_discounted_by_injury_doubt():
     assert projected.loc[0, "projected_points"] == 0.5 * (5.0 + FIXTURE_DIFFICULTY_WEIGHT)
 
 
+def test_projection_never_negative():
+    # No form + a hard fixture used to give -0.15 (shown as "-0.0" on the
+    # bench). A hard fixture alone shouldn't predict LOSING points.
+    projected = project_gameweek_points(_features(form=0.0, next_fixture_difficulty=5))
+    assert projected.loc[0, "projected_points"] == 0.0
+
+
 def test_unavailable_player_projects_zero():
     # Status 'i' = injured: stale form must not produce a projection.
     projected = project_gameweek_points(_features(status="i"))

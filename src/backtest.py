@@ -155,8 +155,9 @@ def project(form: pd.Series, difficulty: pd.Series, weight: float) -> pd.Series:
     Same formula as models.py (form + fixture adjustment), but with the
     fixture weight as a parameter so we can try different values.
     Playing probability is left out: we only test matches the player played.
+    Floored at 0, exactly like models.py.
     """
-    return form + (AVERAGE_DIFFICULTY - difficulty) * weight
+    return (form + (AVERAGE_DIFFICULTY - difficulty) * weight).clip(lower=0)
 
 
 def score(predicted: pd.Series, table: pd.DataFrame) -> dict:

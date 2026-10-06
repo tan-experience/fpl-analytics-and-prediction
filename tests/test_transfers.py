@@ -86,5 +86,12 @@ def test_simulate_rejects_over_budget(fake_api, players):
 
 def test_simulate_rejects_player_already_owned(fake_api, players):
     fake_api(make_squad(players, [1, 3, 4], captain_id=4))
-    with pytest.raises(ValueError, match="already in this squad"):
+    # The message should name the player, not show an internal ID.
+    with pytest.raises(ValueError, match="^Mbeumo is already in this squad"):
         transfers.simulate_transfer(team_id=1, out_player_id=1, in_player_id=3)
+
+
+def test_simulate_rejects_selling_player_not_owned(fake_api, players):
+    fake_api(make_squad(players, [1, 3, 4], captain_id=4))
+    with pytest.raises(ValueError, match="^Saka isn't in this squad"):
+        transfers.simulate_transfer(team_id=1, out_player_id=2, in_player_id=10)
