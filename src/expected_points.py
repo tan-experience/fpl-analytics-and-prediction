@@ -132,6 +132,71 @@ def evaluate(history: pd.DataFrame, gameweeks: list, scoring: dict) -> pd.DataFr
     return pd.DataFrame(rows)
 
 
+def project_next_gameweek(gameweek: int = None) -> pd.DataFrame:
+    """
+    The LIVE version: every player's expected points for the next deadline's
+    gameweek (or the given one), split into the same parts as the backtest.
+    Uses only FPL's main data file plus the team model - no per-player
+    history downloads - so the web app stays fast.
+
+    Returns one row per player: id, gameweek, matches (0 = blank gameweek,
+    2 = double), one xp_<part> column per part, and xp_total.
+    """
+    from src import fetch
+    from src.attacking_points import next_gameweek_attack
+    from src.defensive_contributions import next_gameweek_contributions
+    from src.defensive_points import next_gameweek_defence, team_matches_played
+
+    bootstrap = fetch.get_bootstrap_static()
+    fixtures = fetch.get_fixtures()
+    if gameweek is None:
+        gameweek = next(e["id"] for e in bootstrap["events"] if e["is_next"])
+
+    teams_by_id = {t["id"]: t["name"] for t in bootstrap["teams"]}
+    positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
+    team_matches = team_matches_played(fixtures, teams_by_id)
+    matches_this_gw = {name: 0 for name in teams_by_id.values()}
+    for f in fixtures:
+        if f["event"] == gameweek:
+            matches_this_gw[teams_by_id[f["team_h"]]] += 1
+            matches_this_gw[teams_by_id[f["team_a"]]] += 1
+
+    defence = next_gameweek_defence(gameweek).set_index("id")
+    contributions = next_gameweek_contributions(gameweek).set_index("id")
+    attack = next_gameweek_attack(gameweek).set_index("id")
+
+    rows = []
+    for p in bootstrap["elements"]:
+        pos = positions[p["element_type"]]
+        if pos not in ("GKP", "DEF", "MID", "FWD"):
+            continue
+        team = teams_by_id[p["team"]]
+        played = team_matches[team]
+        n = matches_this_gw[team]
+        p60 = defence.loc[p["id"], "p60"]
+        # Same availability rule as the other parts: out = 0, doubtful = scaled down.
+        if p["status"] in ("i", "s", "u", "n"):
+            fitness = 0.0
+        elif p["chance_of_playing_next_round"] is None:
+            fitness = 1.0
+        else:
+            fitness = p["chance_of_playing_next_round"] / 100
+        per_match = (lambda total: total / played * fitness) if played else (lambda total: 0.0)
+
+        parts = {
+            "appearance": n * 2 * p60,
+            "clean_sheet_and_conceded": defence.loc[p["id"], "expected_defensive_points"],
+            "defensive_contribution": contributions.loc[p["id"], "expected_dc_points"],
+            "goals_and_assists": attack.loc[p["id"], "expected_attacking_points"] if p["id"] in attack.index else 0.0,
+            "bonus": n * per_match(p["bonus"]),
+            "saves": n * per_match(p["saves"]) / 3 if pos == "GKP" else 0.0,
+        }
+        rows.append({"id": p["id"], "gameweek": gameweek, "matches": n,
+                     **{f"xp_{k}": float(v) for k, v in parts.items()},
+                     "xp_total": float(sum(parts.values()))})
+    return pd.DataFrame(rows)
+
+
 def _rank_corr(rows: pd.DataFrame, column: str) -> float:
     return rows.groupby("gameweek").apply(
         lambda g: g[column].rank().corr(g["actual"].rank()), include_groups=False

@@ -15,7 +15,7 @@ Beginner notes:
   Streamlit re-runs this whole script from top to bottom and redraws the page.
   That's why there's no "event handling" code here - just top-to-bottom logic.
 - Like cli.py, this file only DISPLAYS things. All the actual calculation
-  lives in src/ (team.py, transfers.py, models.py), so the website and the
+  lives in src/ (projections.py, team.py, transfers.py), so the website and the
   command line always give the same answers.
 """
 
@@ -23,8 +23,7 @@ import requests
 import streamlit as st
 
 from src.cli import _money
-from src.features import build_player_features
-from src.models import project_gameweek_points
+from src.projections import get_projections
 from src.team import get_squad_projection
 from src.transfers import simulate_transfer, suggest_transfers
 
@@ -36,8 +35,20 @@ SQUAD_COLUMNS = {
     "team": "Club",
     "position": "Pos",
     "now_cost": "Price (£m)",
-    "projected_points": "Projected pts",
+    "projected_points": "Expected pts",
     "effective_points": "After captaincy",
+}
+
+# The parts that make up each projection, with friendlier headings.
+BREAKDOWN_COLUMNS = {
+    "web_name": "Player",
+    "xp_appearance": "Playing",
+    "xp_clean_sheet_and_conceded": "Clean sheet",
+    "xp_defensive_contribution": "Def. actions",
+    "xp_goals_and_assists": "Goals + assists",
+    "xp_bonus": "Bonus",
+    "xp_saves": "Saves",
+    "projected_points": "Total",
 }
 
 st.set_page_config(page_title="FPL Analytics", page_icon="⚽", layout="centered")
@@ -67,8 +78,9 @@ st.write(
     "transfer you're thinking about - before you make it."
 )
 st.caption(
-    f"🚧 Work in progress. Projections use a simple, transparent formula "
-    f"(recent form + fixture difficulty). [Source code and how accurate it is]({REPO_URL})."
+    f"🚧 Work in progress. Projections add up each part of FPL scoring - playing time, "
+    f"clean sheets, defensive actions, goals and assists, bonus - from each player's "
+    f"underlying stats and a team-strength model. [Source code and how accurate it is]({REPO_URL})."
 )
 
 team_input = st.text_input(
@@ -91,7 +103,7 @@ team_id = int(team_input.strip())
 try:
     with st.spinner("Fetching your squad from FPL..."):
         squad_df, gameweek = get_squad_projection(team_id)
-        projections = project_gameweek_points(build_player_features())
+        projections = get_projections()
 except requests.HTTPError as e:
     if e.response is not None and e.response.status_code == 404:
         st.error(f"No FPL team found with ID {team_id}. Double-check the number.")
@@ -109,12 +121,20 @@ starters = squad_df[squad_df["is_starting"]]
 total = starters["effective_points"].sum()
 
 st.metric("Projected points, starting XI", f"{total:.1f}")
-st.caption(f"Squad as locked in for Gameweek {gameweek}, projected for each player's next fixture.")
+projection_gw = int(projections["gameweek"].iloc[0])
+st.caption(f"Squad as locked in for Gameweek {gameweek}, projected for Gameweek {projection_gw}.")
 
 st.subheader("Starting XI")
 st.dataframe(_squad_table(starters), hide_index=True, width="stretch")
 st.subheader("Bench")
 st.dataframe(_squad_table(squad_df[~squad_df["is_starting"]]), hide_index=True, width="stretch")
+
+with st.expander("Where do these projections come from?"):
+    st.caption('Expected points from each part of FPL scoring, before captaincy. '
+               '"Playing" is the 2 points for 60+ minutes, times the chance they play that long.')
+    breakdown = projections.set_index("id").loc[squad_df["id"]].reset_index()
+    st.dataframe(breakdown[list(BREAKDOWN_COLUMNS)].rename(columns=BREAKDOWN_COLUMNS).round(2),
+                 hide_index=True, width="stretch")
 
 # ---------------------------------------------------------------- suggestions
 st.header("Transfer suggestions")
@@ -181,6 +201,9 @@ else:
     note = result["new_squad"].get("_note")
     if note is not None and note.notna().any():
         st.info(note.dropna().iloc[0])
+    compare = players_by_id.loc[[out_id, in_id]].reset_index()
+    st.dataframe(compare[list(BREAKDOWN_COLUMNS)].rename(columns=BREAKDOWN_COLUMNS).round(2),
+                 hide_index=True, width="stretch")
     st.caption("Sell price is assumed to equal the current price; FPL's real rule can differ slightly.")
 
 # ---------------------------------------------------------------- footer
