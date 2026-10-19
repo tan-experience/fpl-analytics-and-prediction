@@ -102,7 +102,10 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
   - [x] Team attack/defence ratings and expected goals per match
         (`python -m src.team_strength`) - predicts team goals far better
         than FPL's difficulty rating (0.21 vs 0.02 rank correlation)
-  - [ ] Clean-sheet probability for defenders and goalkeepers
+  - [x] Clean-sheet and goals-conceded points per player
+        (`python -m src.defensive_points`) - well calibrated: 31.7 clean
+        sheets predicted vs 32 actual over GW2-7
+  - [ ] Defensive contribution points (player's own tackling/blocking record)
   - [ ] Each player's share of their team's attack
   - [ ] Combine into expected points; backtest against the baseline
 - [ ] Machine-learning projection, compared against the baseline
@@ -176,6 +179,7 @@ src/
   transfers.py   transfer suggestions + what-if simulator
   backtest.py    accuracy measurement against past gameweeks
   team_strength.py  team attack/defence ratings, expected goals per match
+  defensive_points.py  clean-sheet and goals-conceded points per player
   cli.py         command-line interface
 app.py           web app (Streamlit)
 tests/           automated tests
