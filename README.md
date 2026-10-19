@@ -111,7 +111,10 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
   - [x] Goal and assist points (`python -m src.attacking_points`) - from
         each player's xG/xA per 90, adjusted for the opponent; beats recent
         goals/assists (0.27 vs 0.22 rank correlation)
-  - [ ] Combine into expected points; backtest against the baseline
+  - [x] Combine into expected points (`python -m src.expected_points`) -
+        **beats the original formula: 0.366 vs 0.318** rank correlation
+        (GW3-7, same 1,469 player-matches)
+  - [ ] Switch the CLI, transfer suggestions and web app to it
 - [ ] Machine-learning projection, compared against the baseline
 
 ---
@@ -186,6 +189,7 @@ src/
   defensive_points.py  clean-sheet and goals-conceded points per player
   defensive_contributions.py  defensive contribution points per player
   attacking_points.py  goal and assist points per player
+  expected_points.py  all parts combined + backtest vs the original formula
   cli.py         command-line interface
 app.py           web app (Streamlit)
 tests/           automated tests
