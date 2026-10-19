@@ -109,7 +109,7 @@ def load_matches() -> pd.DataFrame:
             "home_difficulty": f["team_h_difficulty"],
             "away_difficulty": f["team_a_difficulty"],
         }
-        for f in fetch.get_fixtures() if f["finished"]
+        for f in fetch.get_fixtures() if f["finished_provisional"]  # score is final once the match ends
     ])
     return pd.concat([last, current], ignore_index=True)
 
@@ -263,7 +263,7 @@ if __name__ == "__main__":
 
     # Upcoming fixtures: expected goals and clean-sheet chances.
     teams_by_id = {t["id"]: t["name"] for t in fetch.get_bootstrap_static()["teams"]}
-    upcoming = [f for f in fetch.get_fixtures() if not f["finished"] and f["event"]]
+    upcoming = [f for f in fetch.get_fixtures() if not f["finished_provisional"] and f["event"]]
     next_gw = min(f["event"] for f in upcoming)
     print(f"\nGameweek {next_gw} - expected goals (and each side's clean-sheet chance):")
     for f in sorted((f for f in upcoming if f["event"] == next_gw), key=lambda f: f["kickoff_time"]):
