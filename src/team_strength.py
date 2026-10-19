@@ -77,6 +77,17 @@ class TeamStrengths:
             self.away_rate * a["attack"] * h["defence_weakness"],
         )
 
+    def opponent_factor(self, opponent: str, is_home: bool) -> float:
+        """
+        How much easier (>1) or harder (<1) than usual it should be to score
+        against this opponent, at home or away - WITHOUT re-rating your own
+        team's attack. Used for players, whose own xG already reflects how
+        good their team's attack is this season.
+        """
+        average_rate = (self.home_rate + self.away_rate) / 2
+        venue_rate = self.home_rate if is_home else self.away_rate
+        return self.table.loc[opponent, "defence_weakness"] * venue_rate / average_rate
+
 
 def load_matches() -> pd.DataFrame:
     """

@@ -109,3 +109,14 @@ def test_evaluate_never_uses_the_gameweek_being_predicted():
     changed = evaluate(season(7), teams=["A", "B", "C", "D"], gameweeks=[2])
     pd.testing.assert_series_equal(normal["predicted"], changed["predicted"])
     assert len(normal) == 4  # 2 matches x 2 teams
+
+
+def test_opponent_factor():
+    # D concedes 3 to everyone, others concede 1; home sides score 50% more.
+    matches = pd.DataFrame(_round_robin(
+        lambda h, a: (3 if a == "D" else 1, 3 if h == "D" else 1)))
+    strengths = fit_team_strengths(matches, AS_OF, teams=["A", "B", "C", "D"])
+    weak = strengths.table.loc["D", "defence_weakness"]
+    avg_rate = (strengths.home_rate + strengths.away_rate) / 2
+    assert strengths.opponent_factor("D", is_home=True) == pytest.approx(weak * strengths.home_rate / avg_rate)
+    assert strengths.opponent_factor("D", is_home=True) > strengths.opponent_factor("A", is_home=True)
