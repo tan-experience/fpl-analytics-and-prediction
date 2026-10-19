@@ -98,6 +98,16 @@ def score_clean_sheet_predictions(rows: pd.DataFrame) -> dict:
     }
 
 
+def team_matches_played(fixtures: list, teams_by_id: dict) -> dict:
+    """How many matches each team has played so far this season (for start rates)."""
+    played = {name: 0 for name in teams_by_id.values()}
+    for f in fixtures:
+        if f["finished_provisional"]:
+            played[teams_by_id[f["team_h"]]] += 1
+            played[teams_by_id[f["team_a"]]] += 1
+    return played
+
+
 def next_gameweek_defence(gameweek: int = None) -> pd.DataFrame:
     """
     Expected clean-sheet and goals-conceded points for every player in the
@@ -126,12 +136,7 @@ def next_gameweek_defence(gameweek: int = None) -> pd.DataFrame:
         opponent_goals[home].append(exp_away)
         opponent_goals[away].append(exp_home)
 
-    # How many matches each team has played so far (for the start rate).
-    team_matches = {name: 0 for name in teams_by_id.values()}
-    for f in fixtures:
-        if f["finished_provisional"]:
-            team_matches[teams_by_id[f["team_h"]]] += 1
-            team_matches[teams_by_id[f["team_a"]]] += 1
+    team_matches = team_matches_played(fixtures, teams_by_id)
 
     rows = []
     for p in bootstrap["elements"]:
