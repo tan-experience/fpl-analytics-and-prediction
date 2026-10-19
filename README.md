@@ -105,7 +105,9 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
   - [x] Clean-sheet and goals-conceded points per player
         (`python -m src.defensive_points`) - well calibrated: 31.7 clean
         sheets predicted vs 32 actual over GW2-7
-  - [ ] Defensive contribution points (player's own tackling/blocking record)
+  - [x] Defensive contribution points (`python -m src.defensive_contributions`)
+        - from each player's actions per 90; 163 threshold hits predicted vs
+        169 actual over GW3-7
   - [ ] Each player's share of their team's attack
   - [ ] Combine into expected points; backtest against the baseline
 - [ ] Machine-learning projection, compared against the baseline
@@ -180,6 +182,7 @@ src/
   backtest.py    accuracy measurement against past gameweeks
   team_strength.py  team attack/defence ratings, expected goals per match
   defensive_points.py  clean-sheet and goals-conceded points per player
+  defensive_contributions.py  defensive contribution points per player
   cli.py         command-line interface
 app.py           web app (Streamlit)
 tests/           automated tests

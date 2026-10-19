@@ -252,3 +252,43 @@ automatically, so a mismatch can't silently split one club into two).
 as your own data accumulates. And test the decision, not just the model:
 running the "this season only" option alongside turned a judgement call
 into evidence.
+
+---
+
+## 2026-10 — Estimating defensive contributions from season totals, not match history (Phase 3)
+
+**Problem:** FPL awards +2 when a player's defensive actions in a match
+reach a threshold (10 for defenders, 12 for midfielders/forwards). To
+project these points we need each player's chance of reaching it next match.
+
+**Options considered:**
+1. **Match-by-match history** - how often they've actually hit the
+   threshold. The most direct measure, but it needs every player's history:
+   ~700 extra API calls, making the web app slow to load
+2. **Season rate** - their actions per 90 minutes (already in FPL's main
+   data file), converted into a chance of reaching the threshold with the
+   same Poisson maths used for goals
+
+**Decision:** Option 2.
+
+**Why - the evidence:** a leakage-free backtest over GW3-7 (908
+player-matches of 60+ minutes, 169 threshold hits), Brier score (lower is
+better):
+
+| Method | Brier | Predicted hits |
+|---|---|---|
+| Season rate | 0.130 | 163 |
+| Match history | 0.133 | 159 |
+| Position average | 0.143 | 153 |
+
+The cheaper option was also the more accurate one, for defenders and
+midfielders separately too - so there was no real trade-off to make.
+
+**Also checked rather than assumed:** the API gives the points value but
+not the thresholds, so they were verified against FPL's own GW6 points
+breakdown (a clean split at 10 for defenders and 12 for midfielders).
+
+**PM lesson:** "More data" and "more direct" feel more accurate, but test
+before paying for them - here the expensive option would have cost load
+time for a slightly worse answer. Framing it as speed *vs* accuracy assumed
+a trade-off that the evidence showed didn't exist.
