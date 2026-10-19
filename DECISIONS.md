@@ -292,3 +292,42 @@ breakdown (a clean split at 10 for defenders and 12 for midfielders).
 before paying for them - here the expensive option would have cost load
 time for a slightly worse answer. Framing it as speed *vs* accuracy assumed
 a trade-off that the evidence showed didn't exist.
+
+---
+
+## 2026-10 — Adjusting attacking returns for the opponent only (Phase 3)
+
+**Problem:** Expected goals/assists start from each player's xG and xA
+per 90 this season. The question was how to adjust those for next
+match's fixture.
+
+**Options considered (backtested, GW3-7, 2,098 player-matches):**
+
+| Approach | Rank correlation | Predicted total (actual 1,018) |
+|---|---|---|
+| No fixture adjustment | 0.272 | 1,046 |
+| **Opponent-only**: scale by the opponent's defensive weakness + home/away | 0.271 | 1,048 |
+| Full team model: scale by the team's predicted goals vs its usual xG | 0.262 | 984 |
+| (Baseline: recent actual goals/assists per match) | 0.224 | 1,099 |
+
+**Decision:** Opponent-only.
+
+**Why:** The first version (full team model) slightly *hurt*. The reason
+was traceable: a player's xG already reflects how good their own team's
+attack is this season, but the team model's prediction also re-rates that
+attack - leaning partly on last season - so it dragged this season's
+strong attacks back towards last year. Adjusting only for the opponent
+removes that double-counting. On five gameweeks it's level with no
+adjustment (0.271 vs 0.272 - too close to call), and it's chosen because
+it's the principled version and matches a strong prior from the wider
+game (fixtures do matter). The backtest keeps reporting the no-adjustment
+version, so if more data shows the adjustment adds nothing, it'll show.
+
+**Also learned:** xG/xA rates beat actual recent goals/assists clearly
+(0.27 vs 0.22) - chance quality predicts better than finishing luck.
+
+**PM lesson:** When a reasonable-sounding feature makes results worse,
+find out *why* before dropping it - here the cause (double-counting) led
+to a better design rather than abandoning the idea. And when two options
+tie, choose on principle and keep measuring, rather than over-reading a
+0.001 difference.
