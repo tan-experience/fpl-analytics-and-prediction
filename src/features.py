@@ -26,10 +26,14 @@ def _upcoming_fixtures_for_team(team_id: int, fixtures: list) -> list:
     All of a team's not-yet-played fixtures, in chronological order.
     Fixtures aren't guaranteed to arrive sorted; some also have event=None
     (not yet scheduled, e.g. postponed) - those get pushed to the end.
+
+    "Played" means finished_provisional: FPL sets that as soon as a match
+    ends, but only sets "finished" once bonus points are confirmed, which
+    can be days later.
     """
     upcoming = [
         f for f in fixtures
-        if not f["finished"] and (f["team_h"] == team_id or f["team_a"] == team_id)
+        if not f["finished_provisional"] and (f["team_h"] == team_id or f["team_a"] == team_id)
     ]
     upcoming.sort(key=lambda f: (f["event"] is None, f["event"]))
     return upcoming
