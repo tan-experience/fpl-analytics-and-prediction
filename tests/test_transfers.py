@@ -33,37 +33,24 @@ def fake_api(monkeypatch, players):
     return set_squad
 
 
-def test_injured_starter_is_flagged(fake_api, players):
-    # Palmer (id 1) is injured and projected 0 - this was the original bug:
-    # he was never suggested because his fixtures weren't "tough".
-    fake_api(make_squad(players, [1, 3, 4], captain_id=4))
-    suggestions = transfers.suggest_transfers(team_id=1)
-    assert suggestions[0]["out_name"] == "Palmer"
-    assert suggestions[0]["reason"] == "not expected to play"
-    assert suggestions[0]["in_name"] == "Saka"  # best affordable MID
+def test_suggestions_ranked_by_best_xi_gain_with_reasons(fake_api, players):
+    # See test_transfer_search.py for the worked numbers on this squad.
+    fake_api(make_squad(players, FULL_SQUAD, captain_id=4))
+    # Top 5: DefD/DefE -> DefF tie at +4.0; DefC -> DefF and Palmer -> Saka tie at +3.5.
+    suggestions = transfers.suggest_transfers(team_id=1, max_suggestions=5)
+    assert suggestions[0]["in_name"] == "DefF"
+    assert suggestions[0]["gain"] == pytest.approx(4.0)
+    palmer = next(s for s in suggestions if s["out_name"] == "Palmer")
+    assert palmer["in_name"] == "Saka"
+    assert palmer["reason"] == "Palmer isn't expected to play"
+    assert suggestions[0]["reason"].startswith("DefF projects 6.5 pts vs")
 
 
-def test_healthy_squad_gets_no_suggestions(fake_api, players):
-    # Mbeumo and Haaland: available, decent projections, easy fixtures.
-    fake_api(make_squad(players, [3, 4], captain_id=4))
+def test_no_suggestions_when_nothing_improves_the_best_xi(fake_api, players):
+    # Nobody outside the squad is projected to score: nothing worth buying.
+    players.loc[~players["id"].isin(FULL_SQUAD), "projected_points"] = 0.0
+    fake_api(make_squad(players, FULL_SQUAD, captain_id=4))
     assert transfers.suggest_transfers(team_id=1) == []
-
-
-def test_weak_player_with_tough_run_is_flagged(fake_api, players):
-    # Make Mbeumo poor (1 pt, below the MID average) with a brutal run ahead.
-    players.loc[players["id"] == 3, ["projected_points", "next_3_avg_difficulty"]] = [1.0, 4.5]
-    players.loc[players["id"] == 1, ["projected_points", "status"]] = [4.0, "a"]  # Palmer healthy
-    fake_api(make_squad(players, [1, 3, 4], captain_id=4))
-    suggestions = transfers.suggest_transfers(team_id=1)
-    assert [s["out_name"] for s in suggestions] == ["Mbeumo"]
-    assert suggestions[0]["reason"] == "tough run + below position average"
-
-
-def test_suggestions_respect_budget(fake_api, players):
-    # B.Fernandes (£11.9m) would be too expensive for Palmer (£9.7m) + £1.0m bank.
-    fake_api(make_squad(players, [1, 3, 4], captain_id=4))
-    suggested_in = {s["in_name"] for s in transfers.suggest_transfers(team_id=1)}
-    assert "B.Fernandes" not in suggested_in
 
 
 def test_simulate_judges_by_best_xi_and_formation(fake_api, players):

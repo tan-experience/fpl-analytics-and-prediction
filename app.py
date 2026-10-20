@@ -19,6 +19,7 @@ Beginner notes:
   command line always give the same answers.
 """
 
+import pandas as pd
 import requests
 import streamlit as st
 
@@ -26,7 +27,12 @@ from src.cli import _money
 from src.lineup import best_xi, formation_options
 from src.projections import get_projections
 from src.team import get_squad_projection
-from src.transfers import simulate_transfer, suggest_transfers
+from src.transfers import (
+    plan_transfers,
+    simulate_transfer,
+    suggestions_from_search,
+    transfer_search_for_team,
+)
 
 REPO_URL = "https://github.com/tan-experience/fpl-analytics-and-prediction"
 
@@ -181,17 +187,63 @@ with tab_team:
 
 with tab_transfers:
     # ---------------------------------------------------------------- suggestions
-    st.header("Transfer suggestions")
-    st.caption("Starters not expected to play, or below their position's average with a tough run of fixtures ahead.")
+    st.header("This gameweek's transfer plan")
+    free_transfers = st.selectbox(
+        "Free transfers available", options=[0, 1, 2, 3, 4, 5], index=1,
+        help="Check the Transfers page in the FPL app. Each transfer beyond your free ones costs 4 points.",
+    )
 
-    suggestions = suggest_transfers(team_id)
+    # One search, used for the plan, the suggestions and the what-if defaults.
+    with st.spinner("Searching every transfer and pair of transfers..."):
+        search = transfer_search_for_team(team_id)
+    plan = plan_transfers(search, free_transfers=free_transfers)
+    options = plan["options"]
+    pair = search["best_pair"]
+    top_single = search["singles"].iloc[0] if len(search["singles"]) else None
+
+    if plan["recommended"] == "none":
+        st.info("**Recommendation: save your transfer.** No transfer improves your best XI "
+                "by more than it costs this week.")
+    elif plan["recommended"] == "single":
+        st.success(f"**Recommendation: {top_single['out_name']} → {top_single['in_name']}** "
+                   f"(+{options['single']['net']:.2f} pts to your best XI"
+                   + (f", after a -{options['single']['hit']} hit" if options["single"]["hit"] else "") + ")")
+    else:
+        st.success(f"**Recommendation: two transfers** - {pair['out_names'][0]} → {pair['in_names'][0]} "
+                   f"and {pair['out_names'][1]} → {pair['in_names'][1]} "
+                   f"(+{options['pair']['gain']:.2f} pts"
+                   + (f", -{options['pair']['hit']} hit = {options['pair']['net']:+.2f}" if options["pair"]["hit"] else "")
+                   + f"; best formation {pair['formation_after']})")
+
+    if plan["hit_worth_it"] is not None:
+        extra = options["pair"]["gain"] - options["single"]["gain"]
+        verdict = "worth it" if plan["hit_worth_it"] else "not worth it"
+        st.write(f"**Is a -4 hit worth it?** {verdict.capitalize()}: a second transfer adds "
+                 f"{extra:+.2f} pts, against the {options['pair']['hit'] - options['single']['hit']}-point cost.")
+
+    with st.expander("Compare the options"):
+        rows = [{"Plan": "No transfer", "Gain": 0.0, "Hit": 0, "Net": 0.0}]
+        if top_single is not None:
+            rows.append({"Plan": f"{top_single['out_name']} → {top_single['in_name']}",
+                         "Gain": options["single"]["gain"], "Hit": -options["single"]["hit"],
+                         "Net": options["single"]["net"]})
+        if pair:
+            rows.append({"Plan": f"{pair['out_names'][0]} → {pair['in_names'][0]}, "
+                                 f"{pair['out_names'][1]} → {pair['in_names'][1]}",
+                         "Gain": options["pair"]["gain"], "Hit": -options["pair"]["hit"],
+                         "Net": options["pair"]["net"]})
+        st.dataframe(pd.DataFrame(rows).round(2), hide_index=True, width="stretch")
+    st.caption("⚠️ Based on next gameweek only. A new player keeps scoring for weeks, so this "
+               "undervalues transfers - hits especially. Multi-gameweek projections are coming.")
+
+    st.subheader("Best single transfers")
+    suggestions = suggestions_from_search(search)
     if not suggestions:
-        st.success("Nothing flagged - your starters look fine on form and fixtures for now.")
+        st.write("No single transfer improves your best XI this week.")
     for s in suggestions:
-        gain = s["in_projected_points"] - s["out_projected_points"]
         st.markdown(
-            f"**{s['out_name']} → {s['in_name']}** &nbsp; +{gain:.2f} pts, "
-            f"cost {_money(s['cost_diff'])}  \n*Reason: {s['reason']}*"
+            f"**{s['out_name']} → {s['in_name']}** &nbsp; +{s['gain']:.2f} pts to your best XI, "
+            f"cost {_money(s['cost_diff'])}  \n*{s['reason']}*"
         )
 
     # ---------------------------------------------------------------- what-if

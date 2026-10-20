@@ -106,6 +106,38 @@ def best_xi(squad: pd.DataFrame, limits: dict = None, formation: tuple = None) -
     }
 
 
+def best_total(points_by_position: dict, limits: dict) -> float:
+    """
+    The same answer as best_xi(...)["total"], but much faster - used when
+    searching thousands of transfer combinations, where best_xi()'s tables
+    would be too slow. Takes {position: [projected points of each player]}.
+
+    How: sort each position's points (best first), keep running totals
+    ("best 3 defenders add up to X, best 4 to Y..."), then for each
+    formation just add the right running totals together.
+    """
+    prefix = {}
+    for pos in POSITIONS:
+        running, total = [0.0], 0.0
+        for value in sorted(points_by_position.get(pos, []), reverse=True):
+            total += value
+            running.append(total)
+        prefix[pos] = running
+
+    keepers = limits["GKP"][0]
+    best = None
+    for d, m, f in valid_formations(limits):
+        counts = {"GKP": keepers, "DEF": d, "MID": m, "FWD": f}
+        if any(len(prefix[pos]) <= n for pos, n in counts.items()):
+            continue
+        total = sum(prefix[pos][n] for pos, n in counts.items())
+        # Captain: the single best starter, whose points count twice.
+        captain = max(sorted(points_by_position[pos], reverse=True)[0] for pos, n in counts.items() if n)
+        if best is None or total + captain > best:
+            best = total + captain
+    return best
+
+
 def formation_options(squad: pd.DataFrame, limits: dict = None) -> pd.DataFrame:
     """Every legal formation's best total (with captain), highest first."""
     limits = limits or squad_limits()

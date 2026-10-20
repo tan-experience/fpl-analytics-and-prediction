@@ -10,12 +10,14 @@ Two things live here:
    best XI matters: a new signing might start ahead of someone else and
    change your formation, rather than simply taking the old player's slot.
 
-2. suggest_transfers() - scans your current starting XI for players worth
-   considering transferring out: ones NOT EXPECTED TO PLAY (projected 0 -
-   injured, suspended, etc.), or ones both UNDERPERFORMING (below the
-   average projection for their position in your squad) AND facing a
-   TOUGH RUN (hard fixtures over the next 3 gameweeks, not just the next
-   one) - then finds an affordable, better-positioned replacement.
+2. search_transfers() / plan_transfers() / suggest_transfers() - search
+   every legal single transfer and every pair of transfers, score each by
+   how much it improves your BEST XI, and decide whether making a second
+   transfer is worth FPL's -4 points "hit".
+
+   Limitation: this looks at the NEXT GAMEWEEK only. A new player keeps
+   scoring for weeks, so a one-week view undervalues transfers - hits
+   especially. Multi-gameweek projections are on the roadmap.
 
 Why both: the suggestion engine is a starting point, not a verdict - it
 won't know about a player's penalty duties changing, a new signing hogging
@@ -31,17 +33,20 @@ close enough for comparing options but not exact to the pound.
 import pandas as pd
 
 from src import fetch
-from src.lineup import best_xi, formation_options, squad_limits
+from src.lineup import best_total, best_xi, formation_options, squad_limits
 from src.projections import get_projections
 from src.team import get_squad_projection
 
-# How tough a next-3-gameweek average difficulty has to be before we flag it.
-# FPL difficulty runs 1 (easiest) to 5 (hardest); 4+ is a genuinely hard run.
-TOUGH_RUN_THRESHOLD = 4.0
+# FPL's cost of each transfer beyond your free ones.
+HIT_COST = 4
 
-# How fixture ease factors into ranking replacement candidates - same idea
-# as models.py's fixture weight, reused here for consistency.
-FIXTURE_WEIGHT = 0.3
+# For pairs of transfers, how many of the best replacements to try for each
+# player sold. Pairs are where a cheaper downgrade funds an upgrade
+# elsewhere, so we look beyond the single best option per player.
+CANDIDATES_PER_PLAYER = 10
+
+# Player statuses that mean "won't play" - never suggested as replacements.
+UNAVAILABLE = ("i", "s", "u", "n")
 
 # Max players from one club. None = read FPL's own rule from the API
 # (it's 3); tests set a number so they don't need the API.
@@ -139,113 +144,198 @@ def simulate_transfer(team_id: int, out_player_id: int, in_player_id: int, gamew
     }
 
 
+def _points_by_position(rows) -> dict:
+    """{position: [projected points]} for best_total()."""
+    by_pos = {}
+    for row in rows:
+        by_pos.setdefault(row["position"], []).append(row["projected_points"])
+    return by_pos
+
+
+def _clubs_ok(rows, club_limit: int) -> bool:
+    """True if no club has more than club_limit players in these rows."""
+    counts = {}
+    for row in rows:
+        counts[row["team"]] = counts.get(row["team"], 0) + 1
+    return max(counts.values()) <= club_limit
+
+
+def search_transfers(squad: pd.DataFrame, projections: pd.DataFrame, bank: float,
+                     limits: dict, club_limit: int) -> dict:
+    """
+    Searches transfers for a squad, scoring each by how much it improves
+    the best XI (formation and captain chosen each time).
+
+    Returns:
+      base_total  the best XI's projected points now
+      singles     DataFrame, one row per player you could sell: their best
+                  legal replacement and the gain (best first)
+      best_pair   dict for the best combination of two transfers (or None)
+
+    "Legal" = same position, affordable (with the bank - and for pairs, the
+    money from both sales together), at most club_limit per club, and the
+    incoming player isn't injured/suspended/gone.
+    """
+    cols = ["id", "web_name", "team", "position", "now_cost", "projected_points"]
+    squad_rows = squad[cols].to_dict("records")
+    base_total = best_total(_points_by_position(squad_rows), limits)
+    owned = set(squad["id"])
+
+    # Possible replacements per position, best projected first.
+    pool = projections[~projections["id"].isin(owned) & ~projections["status"].isin(UNAVAILABLE)
+                       & (projections["projected_points"] > 0)]
+    pool_by_position = {
+        pos: group.sort_values("projected_points", ascending=False)[cols].to_dict("records")
+        for pos, group in pool.groupby("position")
+    }
+
+    def _total_after(outs, ins):
+        """Best XI total after selling `outs` (ids) and buying `ins` (rows); None if illegal."""
+        rows = [r for r in squad_rows if r["id"] not in outs] + list(ins)
+        if not _clubs_ok(rows, club_limit):
+            return None
+        return best_total(_points_by_position(rows), limits)
+
+    # ---- singles: for each player sold, the best legal replacement.
+    # A better-projected replacement can never lower the best XI, so the
+    # first legal one in the (best-first) pool is the best for that player.
+    singles = []
+    for out in squad_rows:
+        for cand in pool_by_position.get(out["position"], []):
+            if cand["now_cost"] - out["now_cost"] > bank + 1e-9:
+                continue
+            total = _total_after({out["id"]}, [cand])
+            if total is None:
+                continue
+            singles.append({
+                "out_id": out["id"], "out_name": out["web_name"],
+                "out_projected_points": out["projected_points"],
+                "in_id": cand["id"], "in_name": cand["web_name"],
+                "in_projected_points": cand["projected_points"],
+                "cost_diff": round(cand["now_cost"] - out["now_cost"], 1),
+                "gain": total - base_total,
+            })
+            break
+    singles = pd.DataFrame(singles, columns=[
+        "out_id", "out_name", "out_projected_points", "in_id", "in_name",
+        "in_projected_points", "cost_diff", "gain",
+    ]).sort_values("gain", ascending=False, kind="stable").reset_index(drop=True)
+
+    # ---- pairs: two players sold, two bought, with the budget shared.
+    best_pair = None
+    most_freed = max(r["now_cost"] for r in squad_rows)  # the most a 2nd sale could free up
+    for i, out1 in enumerate(squad_rows):
+        for out2 in squad_rows[i + 1:]:
+            budget = bank + out1["now_cost"] + out2["now_cost"]
+            cands1 = [c for c in pool_by_position.get(out1["position"], [])
+                      if c["now_cost"] <= out1["now_cost"] + bank + most_freed][:CANDIDATES_PER_PLAYER]
+            cands2 = [c for c in pool_by_position.get(out2["position"], [])
+                      if c["now_cost"] <= out2["now_cost"] + bank + most_freed][:CANDIDATES_PER_PLAYER]
+            for in1 in cands1:
+                for in2 in cands2:
+                    if in1["id"] == in2["id"] or in1["now_cost"] + in2["now_cost"] > budget + 1e-9:
+                        continue
+                    total = _total_after({out1["id"], out2["id"]}, [in1, in2])
+                    if total is None:
+                        continue
+                    gain = total - base_total
+                    if best_pair is None or gain > best_pair["gain"] + 1e-9:
+                        best_pair = {"outs": [out1, out2], "ins": [in1, in2], "gain": gain}
+
+    if best_pair:
+        new_squad = squad[~squad["id"].isin([o["id"] for o in best_pair["outs"]])][cols]
+        new_squad = pd.concat([new_squad, pd.DataFrame(best_pair["ins"])], ignore_index=True)
+        best_pair = {
+            "out_ids": [o["id"] for o in best_pair["outs"]],
+            "out_names": [o["web_name"] for o in best_pair["outs"]],
+            "in_ids": [c["id"] for c in best_pair["ins"]],
+            "in_names": [c["web_name"] for c in best_pair["ins"]],
+            "cost_diff": round(sum(c["now_cost"] for c in best_pair["ins"])
+                               - sum(o["now_cost"] for o in best_pair["outs"]), 1),
+            "gain": best_pair["gain"],
+            "formation_after": best_xi(new_squad, limits)["formation"],
+        }
+
+    return {"base_total": base_total, "singles": singles, "best_pair": best_pair}
+
+
+def plan_transfers(search: dict, free_transfers: int = 1) -> dict:
+    """
+    Compares three plans for this gameweek - no transfer, the best single
+    transfer, the best pair - after FPL's -4 points for each transfer
+    beyond your free ones. Recommends the plan with the highest net gain
+    (on a tie, the one with fewer transfers).
+
+    Returns: options {"none"/"single"/"pair": {gain, transfers, hit, net}},
+             recommended, free_transfers, and hit_worth_it (True/False when
+             the pair needs a hit the single doesn't; otherwise None).
+    """
+    def _option(gain, transfers):
+        hit = HIT_COST * max(0, transfers - free_transfers)
+        return {"gain": gain, "transfers": transfers, "hit": hit, "net": gain - hit}
+
+    options = {"none": _option(0.0, 0)}
+    if len(search["singles"]):
+        options["single"] = _option(float(search["singles"]["gain"].iloc[0]), 1)
+    if search["best_pair"]:
+        options["pair"] = _option(search["best_pair"]["gain"], 2)
+
+    recommended = "none"
+    for name in ("single", "pair"):
+        if name in options and options[name]["net"] > options[recommended]["net"] + 1e-9:
+            recommended = name
+
+    hit_worth_it = None
+    if "pair" in options and "single" in options and options["pair"]["hit"] > options["single"]["hit"]:
+        hit_worth_it = options["pair"]["net"] > options["single"]["net"] + 1e-9
+    return {"options": options, "recommended": recommended, "hit_worth_it": hit_worth_it,
+            "free_transfers": free_transfers}
+
+
+def explain(row) -> str:
+    """Plain-English reason for a single-transfer suggestion."""
+    if row["out_projected_points"] <= 0:
+        return f"{row['out_name']} isn't expected to play"
+    return (f"{row['in_name']} projects {row['in_projected_points']:.1f} pts "
+            f"vs {row['out_name']}'s {row['out_projected_points']:.1f}")
+
+
+def transfer_search_for_team(team_id: int, gameweek: int = None) -> dict:
+    """search_transfers() for a real team, using its squad and bank from the API."""
+    squad_df, _ = get_squad_projection(team_id, gameweek)
+    club_limit = (fetch.get_bootstrap_static()["game_config"]["rules"]["squad_team_limit"]
+                  if CLUB_LIMIT is None else CLUB_LIMIT)
+    return search_transfers(squad_df, get_projections(), _get_bank(team_id), squad_limits(), club_limit)
+
+
+def suggestions_from_search(search: dict, max_suggestions: int = 3) -> list:
+    """
+    The best single transfers from a search_transfers() result, as dicts with
+    out/in ids and names, projections, cost_diff, gain and a plain-English
+    reason. Transfers that don't improve the best XI aren't included.
+    """
+    singles = search["singles"]
+    singles = singles[singles["gain"] > 0.05].head(max_suggestions)
+    return [{**row, "reason": explain(row)} for row in singles.to_dict("records")]
+
+
 def suggest_transfers(team_id: int, gameweek: int = None, max_suggestions: int = 3) -> list:
-    """
-    Flags starting players worth considering transferring out: ones not
-    expected to play, or ones both underperforming for their position AND
-    facing a tough 3-gameweek run, then finds the best affordable same-position replacement.
-
-    Returns a list of suggestion dicts, best first, each with the player ids
-    so you can feed them straight into simulate_transfer() if you like one.
-    """
-    squad_df, picks_gw = get_squad_projection(team_id, gameweek)
-    bank = _get_bank(team_id)
-
-    projections = get_projections()
-    proj_by_id = projections.set_index("id")
-
-    squad_with_fixtures = squad_df.copy()
-    squad_with_fixtures["next_3_avg_difficulty"] = squad_with_fixtures["id"].map(
-        proj_by_id["next_3_avg_difficulty"]
-    )
-
-    starters = squad_with_fixtures[squad_with_fixtures["is_starting"]].copy()
-    starters["position_avg_points"] = starters.groupby("position")["projected_points"].transform("mean")
-
-    # Two separate reasons to flag a starter:
-    # 1. Not expected to play at all (projection is 0 - injured, suspended,
-    #    or ruled out). This trumps everything: a player who won't play is
-    #    a problem no matter how easy their fixtures are.
-    # 2. Underperforming for their position AND facing a tough run.
-    not_playing = starters["projected_points"] <= 0
-    weak_and_tough_run = (
-        (starters["next_3_avg_difficulty"] >= TOUGH_RUN_THRESHOLD)
-        & (starters["projected_points"] < starters["position_avg_points"])
-    )
-    flagged = starters[not_playing | weak_and_tough_run].copy()
-    flagged["reason"] = "tough run + below position average"
-    flagged.loc[not_playing, "reason"] = "not expected to play"
-
-    squad_ids = set(squad_df["id"])
-    suggestions = []
-
-    for _, weak in flagged.iterrows():
-        budget_ceiling = weak["now_cost"] + bank
-
-        candidates = projections[
-            (projections["position"] == weak["position"])
-            & (~projections["id"].isin(squad_ids))
-            & (projections["now_cost"] <= budget_ceiling)
-            & (projections["status"] == "a")
-        ].copy()
-        if candidates.empty:
-            continue
-
-        # Rank candidates by projected points, discounted for a tough run of
-        # their own - same logic as the weak player's own score, so it's an
-        # apples-to-apples comparison.
-        def _score(row):
-            difficulty = row["next_3_avg_difficulty"] if pd.notna(row["next_3_avg_difficulty"]) else 3.0
-            return row["projected_points"] - FIXTURE_WEIGHT * difficulty
-
-        weak_difficulty = weak["next_3_avg_difficulty"] if pd.notna(weak["next_3_avg_difficulty"]) else 3.0
-        weak_score = weak["projected_points"] - FIXTURE_WEIGHT * weak_difficulty
-
-        candidates["upgrade_score"] = candidates.apply(_score, axis=1)
-        candidates = candidates[candidates["upgrade_score"] > weak_score]
-        if candidates.empty:
-            continue
-
-        best = candidates.sort_values("upgrade_score", ascending=False).iloc[0]
-
-        suggestions.append({
-            "reason": weak["reason"],
-            "out_id": int(weak["id"]),
-            "out_name": weak["web_name"],
-            "out_projected_points": round(weak["projected_points"], 2),
-            "out_next_3_difficulty": round(weak_difficulty, 1),
-            "in_id": int(best["id"]),
-            "in_name": best["web_name"],
-            "in_projected_points": round(best["projected_points"], 2),
-            "in_next_3_difficulty": round(best["next_3_avg_difficulty"], 1) if pd.notna(best["next_3_avg_difficulty"]) else None,
-            "cost_diff": round(best["now_cost"] - weak["now_cost"], 1),
-        })
-
-    suggestions.sort(key=lambda s: s["in_projected_points"] - s["out_projected_points"], reverse=True)
-    return suggestions[:max_suggestions]
+    """The best single transfers for a team, ranked by how much they improve the best XI."""
+    return suggestions_from_search(transfer_search_for_team(team_id, gameweek), max_suggestions)
 
 
 if __name__ == "__main__":
     # Manual test: run `python -m src.transfers` from the project root.
+    import sys
+    sys.stdout.reconfigure(encoding="utf-8")
     TEAM_ID = 895045  # example: overall FPL leader after GW5 - swap in your own ID
 
-    print("Scanning your starting XI for transfer suggestions "
-          "(not playing, or underperforming + tough next-3-gameweek run)...\n")
-    suggestions = suggest_transfers(TEAM_ID)
-
-    if not suggestions:
-        print("Nothing flagged - your starters look fine on form and fixtures for now.")
-    else:
-        for i, s in enumerate(suggestions, start=1):
-            print(f"{i}. OUT: {s['out_name']} "
-                  f"(proj {s['out_projected_points']}, next-3 difficulty {s['out_next_3_difficulty']})")
-            print(f"   IN:  {s['in_name']} "
-                  f"(proj {s['in_projected_points']}, next-3 difficulty {s['in_next_3_difficulty']}, "
-                  f"cost diff £{s['cost_diff']}m)")
-            print(f"   -> simulate_transfer({TEAM_ID}, out_player_id={s['out_id']}, in_player_id={s['in_id']})\n")
-
-    print("To test your OWN transfer idea (any two players, same position):")
-    print(f"  from src.transfers import simulate_transfer")
-    print(f"  result = simulate_transfer({TEAM_ID}, out_player_id=X, in_player_id=Y)")
-    print(f"  print(f\"Projected gain: {{result['projected_gain']}} points, "
-          f"£{{result['remaining_bank']}}m left in bank\")")
+    search = transfer_search_for_team(TEAM_ID)
+    print(f"Best XI now: {search['base_total']:.1f} projected points\n")
+    for i, s in enumerate(suggestions_from_search(search), start=1):
+        print(f"{i}. {s['out_name']} -> {s['in_name']}  (+{s['gain']:.2f}, {s['reason']})")
+    for free in (1, 2):
+        plan = plan_transfers(search, free_transfers=free)
+        print(f"\nWith {free} free transfer(s): recommended = {plan['recommended']}")
+        for name, option in plan["options"].items():
+            print(f"  {name:6}  gain {option['gain']:+.2f}  hit -{option['hit']}  net {option['net']:+.2f}")

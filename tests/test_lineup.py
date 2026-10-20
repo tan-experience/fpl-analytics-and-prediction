@@ -64,3 +64,13 @@ def test_formation_options_lists_every_formation_best_first():
     assert len(options) == 8
     assert options.iloc[0]["formation"] == "4-4-2"
     assert options["total"].is_monotonic_decreasing
+
+
+def test_fast_total_matches_best_xi():
+    # best_total() is the quick version used when searching thousands of
+    # transfer combinations - it must agree with the full best_xi().
+    from src.lineup import best_total
+    for squad in (BALANCED, {"GKP": [4, 3], "DEF": [5, 1, 1, 1, 1], "MID": [6, 6, 6, 6, 6], "FWD": [7, 2, 1]}):
+        frame = _squad(squad)
+        points = {pos: frame.loc[frame["position"] == pos, "projected_points"].tolist() for pos in squad}
+        assert best_total(points, LIMITS) == pytest.approx(best_xi(frame, LIMITS)["total"])
