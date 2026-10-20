@@ -31,7 +31,20 @@ _PLAYERS = [
     (8, "João Pedro", "João Pedro Junqueira de Jesus", "Chelsea", "FWD", 7.7, 2.0, 3.0, "a"),
     (9, "Palmer", "Carl Palmer", "Ipswich", "GKP", 4.0, 1.0, 3.0, "a"),  # a second Palmer
     (10, "Gibbs-White", "Morgan Gibbs-White", "Nott'm Forest", "MID", 8.0, 4.0, 3.0, "a"),
+    # Made-up squad fillers, so tests can build a full, legal 15-player squad.
+    (11, "DefA", "Def A", "Brentford", "DEF", 4.5, 4.0, 3.0, "a"),
+    (12, "DefB", "Def B", "Brentford", "DEF", 4.5, 3.5, 3.0, "a"),
+    (13, "DefC", "Def C", "Everton", "DEF", 4.5, 3.0, 3.0, "a"),
+    (14, "DefD", "Def D", "Everton", "DEF", 4.0, 2.5, 3.0, "a"),
+    (15, "DefE", "Def E", "Fulham", "DEF", 4.0, 1.0, 3.0, "a"),
+    (16, "DefF", "Def F", "Arsenal", "DEF", 5.0, 6.5, 3.0, "a"),
+    (17, "FwdA", "Fwd A", "Leeds", "FWD", 5.5, 3.0, 3.0, "a"),
+    (18, "GkB", "Gk B", "Leeds", "GKP", 4.0, 2.0, 3.0, "a"),
+    (19, "Saliba", "William Saliba", "Arsenal", "DEF", 5.5, 4.5, 3.0, "a"),
 ]
+
+# A full, legal squad: 2 GKP, 5 DEF, 5 MID, 3 FWD (Palmer injured, Saka not owned).
+FULL_SQUAD = [5, 18, 11, 12, 13, 14, 15, 1, 3, 6, 7, 10, 4, 8, 17]
 
 
 @pytest.fixture

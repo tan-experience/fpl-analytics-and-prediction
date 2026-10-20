@@ -373,3 +373,38 @@ which the model doesn't read. It now varies every input the model uses.
 sophisticated. And make the output explainable: a breakdown turns "trust
 me" into "here's why", which matters more for a decision tool than a
 slightly better number.
+
+---
+
+## 2026-10 — Judging transfers by your best XI, not by a like-for-like slot swap
+
+**Problem:** The what-if simulator put an incoming player into the exact
+slot of the outgoing one - same starting/bench status, same captaincy. The
+user's request (choose a transfer *and* see which formation to play
+afterwards) exposed a flaw: sell a benched defender for a strong midfielder
+and the tool kept the new midfielder on the bench, valuing the transfer at
+almost nothing. In reality you'd start him, drop your weakest starter, and
+often change formation.
+
+**Options considered:**
+1. Keep slot swapping, and add a separate formation tool
+2. Judge every transfer by the **best possible XI before vs after** -
+   trying all 8 legal formations and picking the captain each time - and
+   show every formation's total so the user can choose
+
+**Decision:** Option 2.
+
+**Why:** It measures what the user actually cares about (points from the
+team they'd field), and it answers the formation question as a by-product
+rather than as a separate feature. Checking all 8 formations is fast, so no
+optimisation library was needed. The same best-XI picker is the foundation
+for the next features: transfer suggestions ranked by best-XI gain, -4 hit
+evaluation, and the free hit team.
+
+**Also fixed:** the simulator didn't enforce FPL's 3-players-per-club limit.
+It does now (read from FPL's own rules).
+
+**PM lesson:** A user's feature request ("tell me the formation") can reveal
+that the product is measuring the wrong thing. Fixing the measurement
+first made the requested feature fall out naturally - and set up three
+more on the same foundation.
