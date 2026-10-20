@@ -4,8 +4,11 @@ transfers.py
 Two things live here:
 
 1. simulate_transfer() - "what if I swapped player A for player B?" Checks
-   the swap is legal (same position, affordable) and shows the projected
-   points impact BEFORE you make the real transfer on the FPL site.
+   the swap is legal (same position, affordable, max 3 per club) and
+   compares your BEST starting XI before and after - formation, captain
+   and all - BEFORE you make the real transfer on the FPL site. Judging by
+   best XI matters: a new signing might start ahead of someone else and
+   change your formation, rather than simply taking the old player's slot.
 
 2. suggest_transfers() - scans your current starting XI for players worth
    considering transferring out: ones NOT EXPECTED TO PLAY (projected 0 -
@@ -28,6 +31,7 @@ close enough for comparing options but not exact to the pound.
 import pandas as pd
 
 from src import fetch
+from src.lineup import best_xi, formation_options, squad_limits
 from src.projections import get_projections
 from src.team import get_squad_projection
 
@@ -38,6 +42,10 @@ TOUGH_RUN_THRESHOLD = 4.0
 # How fixture ease factors into ranking replacement candidates - same idea
 # as models.py's fixture weight, reused here for consistency.
 FIXTURE_WEIGHT = 0.3
+
+# Max players from one club. None = read FPL's own rule from the API
+# (it's 3); tests set a number so they don't need the API.
+CLUB_LIMIT = None
 
 
 def _get_bank(team_id: int) -> float:
@@ -50,9 +58,16 @@ def simulate_transfer(team_id: int, out_player_id: int, in_player_id: int, gamew
     """
     Simulates swapping out_player_id for in_player_id in the given team's
     squad. Raises ValueError if the swap isn't legal (wrong position, not
-    enough budget, player not actually in your squad, etc).
+    enough budget, a 4th player from one club, player not in your squad...).
 
-    Returns a dict with the old/new squads and the projected points impact.
+    Returns a dict comparing your best XI before and after:
+      before, after         best_xi() results (formation, xi, bench, captain, total)
+      old_starting_total,   best XI projected points (captain included)
+      new_starting_total
+      projected_gain        new minus old
+      joins_xi, leaves_xi   names of players who start after but not before, and vice versa
+      formations_after      every formation's total after the transfer
+      cost_diff, remaining_bank
     """
     squad_df, picks_gw = get_squad_projection(team_id, gameweek)
     projections = get_projections()
@@ -82,6 +97,14 @@ def simulate_transfer(team_id: int, out_player_id: int, in_player_id: int, gamew
             f"the same position (otherwise your formation becomes illegal)."
         )
 
+    remaining = squad_df[squad_df["id"] != out_player_id]
+    club_limit = fetch.get_bootstrap_static()["game_config"]["rules"]["squad_team_limit"]         if CLUB_LIMIT is None else CLUB_LIMIT
+    if (remaining["team"] == in_row["team"]).sum() >= club_limit:
+        raise ValueError(
+            f"{in_row['web_name']} would be your {club_limit + 1}th {in_row['team']} player - "
+            f"FPL allows at most {club_limit} from one club."
+        )
+
     bank = _get_bank(team_id)
     cost_diff = round(in_row["now_cost"] - out_row["now_cost"], 1)
     if cost_diff > bank:
@@ -90,38 +113,27 @@ def simulate_transfer(team_id: int, out_player_id: int, in_player_id: int, gamew
             f"but you only have £{bank}m in the bank."
         )
 
-    # Build the new squad: same bench/captaincy slot as the player going out.
-    new_row = {
-        "id": in_player_id,
-        "web_name": in_row["web_name"],
-        "team": in_row["team"],
-        "position": in_row["position"],
-        "now_cost": in_row["now_cost"],
-        "is_starting": out_row["is_starting"],
-        "is_captain": out_row["is_captain"],
-        "is_vice_captain": out_row["is_vice_captain"],
-        "multiplier": out_row["multiplier"],
-        "projected_points": round(in_row["projected_points"], 2),
-        "effective_points": round(in_row["projected_points"] * out_row["multiplier"], 2),
-    }
-    if out_row["is_captain"]:
-        # Flag rather than silently assume - the model doesn't know if the
-        # incoming player is a sensible captaincy choice.
-        new_row["_note"] = "Was captain - review whether this new player should keep the armband."
+    new_row = {col: in_row[col] for col in ("web_name", "team", "position", "now_cost", "projected_points")}
+    new_squad_df = pd.concat([remaining, pd.DataFrame([{"id": in_player_id, **new_row}])],
+                             ignore_index=True)
 
-    new_squad_df = squad_df[squad_df["id"] != out_player_id].copy()
-    new_squad_df = pd.concat([new_squad_df, pd.DataFrame([new_row])], ignore_index=True)
-
-    old_total = squad_df.loc[squad_df["is_starting"], "effective_points"].sum()
-    new_total = new_squad_df.loc[new_squad_df["is_starting"], "effective_points"].sum()
+    limits = squad_limits()
+    before = best_xi(squad_df, limits)
+    after = best_xi(new_squad_df, limits)
+    names = {**dict(zip(squad_df["id"], squad_df["web_name"])), in_player_id: in_row["web_name"]}
 
     return {
         "picks_gameweek": picks_gw,
         "old_squad": squad_df,
         "new_squad": new_squad_df,
-        "old_starting_total": round(old_total, 2),
-        "new_starting_total": round(new_total, 2),
-        "projected_gain": round(new_total - old_total, 2),
+        "before": before,
+        "after": after,
+        "old_starting_total": round(before["total"], 2),
+        "new_starting_total": round(after["total"], 2),
+        "projected_gain": round(after["total"] - before["total"], 2),
+        "joins_xi": [names[i] for i in after["xi"]["id"] if i not in set(before["xi"]["id"])],
+        "leaves_xi": [names[i] for i in before["xi"]["id"] if i not in set(after["xi"]["id"])],
+        "formations_after": formation_options(new_squad_df, limits),
         "cost_diff": cost_diff,
         "remaining_bank": round(bank - cost_diff, 2),
     }

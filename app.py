@@ -23,6 +23,7 @@ import requests
 import streamlit as st
 
 from src.cli import _money
+from src.lineup import best_xi, formation_options
 from src.projections import get_projections
 from src.team import get_squad_projection
 from src.transfers import simulate_transfer, suggest_transfers
@@ -58,6 +59,18 @@ def _player_label(player) -> str:
     """Dropdown label, e.g. 'Saka - Arsenal, £9.5m, proj 6.0'."""
     return (f"{player['web_name']} - {player['team']}, £{player['now_cost']}m, "
             f"proj {player['projected_points']:.1f}")
+
+
+def _lineup_text(lineup: dict) -> str:
+    """One line per position for a best_xi() result, captain marked (C)."""
+    lines = []
+    for pos in ("GKP", "DEF", "MID", "FWD"):
+        names = [
+            row["web_name"] + (" (C)" if row["id"] == lineup["captain"] else "")
+            for _, row in lineup["xi"][lineup["xi"]["position"] == pos].iterrows()
+        ]
+        lines.append(f"**{pos}:** {', '.join(names)}")
+    return "  \n".join(lines)
 
 
 def _squad_table(squad_df):
@@ -130,9 +143,29 @@ with tab_team:
     starters = squad_df[squad_df["is_starting"]]
     total = starters["effective_points"].sum()
 
-    st.metric("Projected points, starting XI", f"{total:.1f}")
+    best = best_xi(squad_df)
     projection_gw = int(projections["gameweek"].iloc[0])
-    st.caption(f"Squad as locked in for Gameweek {gameweek}, projected for Gameweek {projection_gw}.")
+
+    col1, col2 = st.columns(2)
+    col1.metric("Your current lineup", f"{total:.1f}")
+    col2.metric(f"Best XI from your squad ({best['formation']})", f"{best['total']:.1f}",
+                delta=f"{best['total'] - total:+.1f} pts")
+    st.caption(f"Squad as locked in for Gameweek {gameweek}, projected for Gameweek {projection_gw}. "
+               f"Both totals include captain points.")
+
+    current_ids = set(starters["id"])
+    to_start = [n for i, n in zip(best["xi"]["id"], best["xi"]["web_name"]) if i not in current_ids]
+    to_bench = [n for i, n in zip(starters["id"], starters["web_name"]) if i not in set(best["xi"]["id"])]
+    best_captain = squad_df.set_index("id").loc[best["captain"], "web_name"]
+    with st.expander(f"Best XI: {best['formation']}, captain {best_captain}"
+                     + (f" - start {', '.join(to_start)}" if to_start else "")):
+        if to_start:
+            st.write(f"**Start** {', '.join(to_start)} **instead of** {', '.join(to_bench)}.")
+        st.markdown(_lineup_text(best))
+        st.caption("Every formation's best total (with captain) - choose for yourself:")
+        st.dataframe(formation_options(squad_df).rename(columns={"formation": "Formation",
+                                                                 "total": "Projected pts"}).round(1),
+                     hide_index=True, width="stretch")
 
     st.subheader("Starting XI")
     st.dataframe(_squad_table(starters), hide_index=True, width="stretch")
@@ -201,17 +234,30 @@ with tab_transfers:
         # Expected problems, e.g. not enough money in the bank.
         st.warning(str(e))
     else:
+        before, after = result["before"], result["after"]
         col1, col2 = st.columns(2)
         col1.metric(
-            "Starting XI projection",
+            f"Best XI: {before['formation']} → {after['formation']}",
             f"{result['new_starting_total']:.1f}",
             delta=f"{result['projected_gain']:+.2f} pts",
         )
         col2.metric("Left in the bank", f"£{result['remaining_bank']:.1f}m",
                     delta=_money(-result["cost_diff"]))
-        note = result["new_squad"].get("_note")
-        if note is not None and note.notna().any():
-            st.info(note.dropna().iloc[0])
+        st.caption("Compares your best possible XI (formation and captain chosen for you) "
+                   "before and after the transfer.")
+        if result["joins_xi"] or result["leaves_xi"]:
+            st.write(f"**Lineup change:** {', '.join(result['joins_xi']) or 'nobody'} starts; "
+                     f"{', '.join(result['leaves_xi']) or 'nobody'} drops out of the XI.")
+
+        # Let the user pick a formation, not just accept the best one.
+        options = result["formations_after"]
+        labels = [f"{f} - {t:.1f} pts" + (" (best)" if i == 0 else "")
+                  for i, (f, t) in enumerate(zip(options["formation"], options["total"]))]
+        chosen = st.selectbox("Formation after this transfer", options=list(range(len(labels))),
+                              format_func=lambda i: labels[i])
+        formation = tuple(int(n) for n in options["formation"].iloc[chosen].split("-"))
+        st.markdown(_lineup_text(best_xi(result["new_squad"], formation=formation)))
+
         compare = players_by_id.loc[[out_id, in_id]].reset_index()
         st.dataframe(compare[list(BREAKDOWN_COLUMNS)].rename(columns=BREAKDOWN_COLUMNS).round(2),
                      hide_index=True, width="stretch")

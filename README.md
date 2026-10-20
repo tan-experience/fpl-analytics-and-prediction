@@ -38,19 +38,30 @@ Projected starting XI total: 58.1 points
 On the web app, each projection is broken down into the parts FPL scores -
 e.g. Gabriel's 5.59 = 2.00 playing + 1.87 clean sheet + 0.60 defensive
 actions + 0.83 goals/assists + 0.29 bonus - so you can see *why* a player
-is rated highly. It also flags starters worth transferring out.
+is rated highly. It also picks your **best XI, formation and captain**,
+and shows every formation's total.
 
 **2. Tests a transfer idea before you commit to it** - checks it's legal
-(same position, affordable) and shows the projected impact:
+(same position, affordable, max 3 per club) and compares your **best XI
+before and after**, so a new signing who changes your formation is valued
+properly:
 
 ```
 What if:
-  OUT: Palmer (Cole Palmer, Chelsea, MID, £9.7m)
-  IN:  Mbeumo (Bryan Mbeumo, Man Utd, MID, £7.8m)
-
-  Starting XI projection: 58.12 -> 59.72  (+1.60 pts)
-  Cost difference: -£1.9m, leaving £3.0m in the bank
+  OUT: Slater (Regan Slater, Hull City, MID, £4.5m)
+  IN:  Iwobi (Alex Iwobi, Fulham, MID, £5.4m)
+  Best XI: 4-3-3 59.28 -> 3-4-3 59.87  (+0.59 pts, captain included)
+  Lineup change: Iwobi starts; O'Shea drops out of the XI
+  Cost difference: +£0.9m, leaving £0.2m in the bank
+  Every formation after the transfer (best first):
+    3-4-3  59.9
+    4-3-3  59.7
+    ...
 ```
+
+Selling a *benched* midfielder still gains points, because the new one
+starts - and the best formation changes. On the web app you can pick any
+formation and see its XI.
 
 ## How good are the projections?
 
@@ -134,8 +145,10 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
         per-player breakdown on the web app
 - [x] App tabs; team ID in the web address (`?team=...`) for bookmarkable links;
       projections saved before every deadline (to the `snapshots` branch)
-- [ ] **Best XI and formation** from your squad - and transfers judged by
-      your best XI before vs after (including whether a -4 hit pays off)
+- [x] **Best XI and formation** from your squad, and every formation's
+      total; transfers judged by your best XI before vs after (with the
+      3-per-club limit enforced)
+- [ ] Transfer suggestions ranked by best-XI gain, and whether a -4 hit pays off
 - [ ] Season tab: rank, points and charts across gameweeks
 - [ ] Next 3 gameweeks: projections and a fixture grid coloured by the team
       model (not FPL's 1-5 rating), and clearer suggestion explanations

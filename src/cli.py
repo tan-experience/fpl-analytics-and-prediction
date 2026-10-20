@@ -175,14 +175,19 @@ def show_what_if(team_id: int, out_value: str, in_value: str) -> None:
 
     result = simulate_transfer(team_id, out_player_id=out_id, in_player_id=in_id)
 
-    print(f"  Starting XI projection: {result['old_starting_total']:.2f} -> "
-          f"{result['new_starting_total']:.2f}  ({result['projected_gain']:+.2f} pts)")
+    before, after = result["before"], result["after"]
+    print(f"  Best XI: {before['formation']} {result['old_starting_total']:.2f} -> "
+          f"{after['formation']} {result['new_starting_total']:.2f}  "
+          f"({result['projected_gain']:+.2f} pts, captain included)")
+    if result["joins_xi"] or result["leaves_xi"]:
+        print(f"  Lineup change: {', '.join(result['joins_xi']) or 'nobody'} starts; "
+              f"{', '.join(result['leaves_xi']) or 'nobody'} drops out of the XI")
     print(f"  Cost difference: {_money(result['cost_diff'])}, "
           f"leaving £{result['remaining_bank']}m in the bank")
 
-    note = result["new_squad"].get("_note")
-    if note is not None and note.notna().any():
-        print(f"  Note: {note.dropna().iloc[0]}")
+    print("\n  Every formation after the transfer (best first):")
+    for row in result["formations_after"].itertuples():
+        print(f"    {row.formation}  {row.total:.1f}")
 
     print("\n  (Sell price assumed = current price; see DECISIONS.md.)")
 
