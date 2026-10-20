@@ -13,30 +13,32 @@ takes), with a backtest that measures how accurate the projections really
 are, and a [decision log](DECISIONS.md) explaining the product trade-offs
 behind it.
 
-> **Status:** work in progress, [live on the web](https://fpl-analytics-and-prediction.streamlit.app/). Projections are a
-> simple baseline for now - a better model is next on the roadmap.
+> **Status:** work in progress, [live on the web](https://fpl-analytics-and-prediction.streamlit.app/). Projections now
+> add up every part of FPL scoring, and beat the original form-based formula
+> in backtesting (see below).
 
 ---
 
 ## What it does
 
-**1. Projects your squad and flags transfers** - shown here for the overall
-FPL leader's squad after Gameweek 5 (output trimmed):
+**1. Projects your squad's expected points** for the next gameweek - shown
+here for the overall FPL leader's squad, projected for Gameweek 8 (trimmed):
 
 ```
 Starting XI:
-         Player Pos  Price  Proj   Eff
-    Haaland (C) FWD   15.6  7.35 14.70
-      Tarkowski DEF    6.2  8.45  8.45
-           Hall DEF    5.3  6.65  6.65
+       Player Pos  Price  Proj   Eff
+  Haaland (C) FWD   15.7  4.92  9.84
+      Gabriel DEF    7.9  5.59  5.59
+         Raya GKP    6.1  5.44  5.44
             ...
-         Palmer MID    9.7  0.00  0.00
 
-Projected starting XI total: 52.2 points
-
-Transfer suggestions (starters not expected to play, or underperforming + tough run):
-  1. Palmer -> Groß  (+15.50 pts, cost -£3.8m) - not expected to play
+Projected starting XI total: 58.1 points
 ```
+
+On the web app, each projection is broken down into the parts FPL scores -
+e.g. Gabriel's 5.59 = 2.00 playing + 1.87 clean sheet + 0.60 defensive
+actions + 0.83 goals/assists + 0.29 bonus - so you can see *why* a player
+is rated highly. It also flags starters worth transferring out.
 
 **2. Tests a transfer idea before you commit to it** - checks it's legal
 (same position, affordable) and shows the projected impact:
@@ -44,10 +46,10 @@ Transfer suggestions (starters not expected to play, or underperforming + tough 
 ```
 What if:
   OUT: Palmer (Cole Palmer, Chelsea, MID, £9.7m)
-  IN:  Mbeumo (Bryan Mbeumo, Man Utd, MID, £7.9m)
+  IN:  Mbeumo (Bryan Mbeumo, Man Utd, MID, £7.8m)
 
-  Starting XI projection: 52.25 -> 56.40  (+4.15 pts)
-  Cost difference: -£1.8m, leaving £1.9m in the bank
+  Starting XI projection: 58.12 -> 59.72  (+1.60 pts)
+  Cost difference: -£1.9m, leaving £3.0m in the bank
 ```
 
 ## How good are the projections?
@@ -56,19 +58,27 @@ Measured, not assumed. The backtest replays past gameweeks, projects every
 match using **only data available before it**, and compares against what
 players actually scored:
 
-| Approach | Rank correlation ↑ |
-|---|---|
-| **This model** (recent form + fixture difficulty) | **0.321** |
-| Recent form only | 0.316 |
-| Season average | 0.316 |
+| Approach | Rank correlation ↑ | Avg miss (points) ↓ |
+|---|---|---|
+| **Expected points** (every scoring part added up) | **0.366** | **2.19** |
+| Original formula (recent form + fixture difficulty) | 0.318 | 2.30 |
 
-*882 player-matches, gameweeks 3–5 of 2026/27. Rank correlation measures
-whether players were put in the right order (1 = perfect, 0 = random) -
-the question FPL decisions actually depend on.*
+*1,469 player-matches, gameweeks 3–7 of 2026/27 - the same matches for both.
+Rank correlation measures whether players were put in the right order
+(1 = perfect, 0 = random) - the question FPL decisions actually depend on.*
 
-**Honest read:** the model ranks players meaningfully better than chance,
-but the fixture-difficulty adjustment adds very little over form alone.
-That's the weakness the next phase targets.
+How expected points are built, each part backtested on its own:
+- **Team strength** (attack/defence ratings from last season + this season)
+  predicts team goals far better than FPL's 1–5 difficulty rating (0.21 vs 0.10)
+- **Clean sheets**: 31.7 predicted vs 32 actual over GW2–7
+- **Defensive contributions**: from each player's actions per 90
+- **Goals and assists**: from xG/xA, adjusted for the opponent - beats recent
+  actual goals/assists (0.27 vs 0.22)
+- **Playing time, bonus and saves**: from this season's record
+
+**Honest read:** better for defenders, midfielders and forwards; slightly
+worse for goalkeepers so far (99 matches - too few to be sure). Early-season
+sample sizes, so the numbers will move as the season goes on.
 
 ## Product decisions
 
@@ -87,6 +97,12 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
   without a terminal, usability mattered more than accuracy gains; the
   riskiest assumption (FPL allowing cloud requests) was tested with a
   throwaway deploy first.
+- **Breaking the prediction into FPL's scoring parts** - a user question
+  exposed that defensive contributions were invisible inside "form";
+  modelling each part separately made every piece checkable.
+- **Switching only on evidence** - the new model replaced the old formula
+  only after beating it on the same matches; each part was backtested
+  against a simpler alternative first, and several "obvious" choices lost.
 
 ## Roadmap
 
@@ -97,7 +113,7 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
 - [x] Backtest + automated tests in CI
 - [x] Web app (Streamlit)
 - [x] [Public deployment](https://fpl-analytics-and-prediction.streamlit.app/) - usable in a browser, no install
-- [ ] **Match/goals prediction** (Poisson model) to replace the coarse 1–5
+- [x] **Match/goals prediction** (Poisson model) to replace the coarse 1–5
       fixture difficulty - target: beat 0.321 rank correlation
   - [x] Team attack/defence ratings and expected goals per match
         (`python -m src.team_strength`) - predicts team goals far better
@@ -114,7 +130,8 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
   - [x] Combine into expected points (`python -m src.expected_points`) -
         **beats the original formula: 0.366 vs 0.318** rank correlation
         (GW3-7, same 1,469 player-matches)
-  - [ ] Switch the CLI, transfer suggestions and web app to it
+  - [x] Switch the CLI, transfer suggestions and web app to it, with a
+        per-player breakdown on the web app
 - [ ] Machine-learning projection, compared against the baseline
 
 ---
@@ -150,8 +167,8 @@ python -m src.cli --team <TEAM_ID>
 # "What if" a specific transfer
 python -m src.cli --team <TEAM_ID> --out Palmer --in "Bukayo Saka"
 
-# How accurate are the projections?
-python -m src.backtest
+# How accurate are the projections? (new model vs original formula)
+python -m src.expected_points
 
 # The web app, in your browser (opens http://localhost:8501)
 streamlit run app.py
@@ -198,7 +215,11 @@ DECISIONS.md     product decision log
 
 ### Known limitations
 
-- Projections are a transparent heuristic, not a trained model (yet).
+- Projections are built from transparent, separately-tested parts rather than
+  a trained machine-learning model. Small parts of FPL scoring aren't modelled
+  yet: the 1 point for substitute appearances, cards, penalties and own goals.
+- Transfer suggestions still flag "tough runs" using FPL's 1–5 difficulty
+  over the next 3 gameweeks; projections cover the next gameweek only.
 - Sell prices are assumed equal to current prices; FPL's real profit-sharing
   rule is slightly different.
 - Uses your squad as of the last deadline - FPL's public API doesn't expose

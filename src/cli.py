@@ -24,8 +24,7 @@ import argparse
 import unicodedata
 import sys
 
-from src.features import build_player_features
-from src.models import project_gameweek_points
+from src.projections import get_projections
 from src.team import get_squad_projection
 from src.transfers import simulate_transfer, suggest_transfers
 
@@ -136,11 +135,12 @@ def show_squad_and_suggestions(team_id: int) -> None:
     squad_df, gameweek = get_squad_projection(team_id)
     total = squad_df.loc[squad_df["is_starting"], "effective_points"].sum()
 
+    projection_gw = int(get_projections()["gameweek"].iloc[0])
     print(f"Team {team_id} - squad as locked in for Gameweek {gameweek}, "
-          f"projected for the next fixture\n")
+          f"projected for Gameweek {projection_gw}\n")
     print(_format_squad(squad_df))
     print(f"\nProjected starting XI total: {total:.1f} points")
-    print("(Proj = player's projection, Eff = after captain/bench multiplier)\n")
+    print("(Proj = expected FPL points, Eff = after captain/bench multiplier)\n")
 
     print("Transfer suggestions (starters not expected to play, or underperforming + tough run):")
     suggestions = suggest_transfers(team_id)
@@ -157,7 +157,7 @@ def show_squad_and_suggestions(team_id: int) -> None:
 
 def show_what_if(team_id: int, out_value: str, in_value: str) -> None:
     """What-if mode: simulate one specific transfer."""
-    projections = project_gameweek_points(build_player_features())
+    projections = get_projections()
     squad_df, _ = get_squad_projection(team_id)
     out_id = _resolve_player(out_value, projections, prefer_ids=set(squad_df["id"]))
     in_id = _resolve_player(in_value, projections)

@@ -23,8 +23,7 @@ def fake_api(monkeypatch, players):
     state = {"squad": None}
     monkeypatch.setattr(transfers, "get_squad_projection", lambda team_id, gw=None: (state["squad"], 5))
     monkeypatch.setattr(transfers, "_get_bank", lambda team_id: BANK)
-    monkeypatch.setattr(transfers, "build_player_features", lambda: players)
-    monkeypatch.setattr(transfers, "project_gameweek_points", lambda df: df)
+    monkeypatch.setattr(transfers, "get_projections", lambda: players)
 
     def set_squad(squad):
         state["squad"] = squad

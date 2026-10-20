@@ -17,8 +17,7 @@ Beginner notes:
 import pandas as pd
 
 from src import fetch
-from src.features import build_player_features
-from src.models import project_gameweek_points
+from src.projections import get_projections
 
 
 def _target_gameweek(bootstrap: dict) -> int:
@@ -64,7 +63,7 @@ def get_squad_projection(team_id: int, gameweek: int = None) -> pd.DataFrame:
     picks_data = fetch.get_entry_picks(team_id, gameweek)
     picks = picks_data["picks"]
 
-    projections = project_gameweek_points(build_player_features())
+    projections = get_projections()
     projections_by_id = projections.set_index("id")
 
     rows = []

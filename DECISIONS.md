@@ -331,3 +331,45 @@ find out *why* before dropping it - here the cause (double-counting) led
 to a better design rather than abandoning the idea. And when two options
 tie, choose on principle and keep measuring, rather than over-reading a
 0.001 difference.
+
+---
+
+## 2026-10 — Switching the product to expected points, goalkeepers included (Phase 3)
+
+**Problem:** Phase 3 built expected points from FPL's scoring parts
+(playing time, clean sheets, defensive contributions, goals and assists,
+bonus, saves). Should it replace the original formula (recent form +
+fixture difficulty) in the CLI, transfer suggestions and web app?
+
+**The evidence:** on exactly the same 1,469 player-matches (GW3-7,
+leakage-free), rank correlation 0.366 vs 0.318, and a smaller average
+miss (2.19 vs 2.30 points). Better for defenders (0.30 vs 0.24),
+midfielders (0.39 vs 0.35) and forwards (0.58 vs 0.52) - but worse for
+goalkeepers (0.05 vs 0.11).
+
+**Options considered:**
+1. Switch everyone to expected points
+2. Switch outfield players, keep the old formula for goalkeepers
+
+**Decision:** Option 1.
+
+**Why:** The goalkeeper result rests on 99 matches - too few to trust a
+difference that size - and two models side by side would make every
+projection harder to explain and compare across positions. The backtest
+keeps reporting goalkeepers separately, so a lasting gap will show up.
+
+**What changed for users:** projections now target the next deadline's
+gameweek (double and blank gameweeks handled), rather than each team's next
+unplayed match - which mid-gameweek could be a match already past the
+deadline. The web app shows each player's breakdown by scoring part, so a
+projection can be questioned, not just trusted.
+
+**Also caught along the way:** the combined model's leakage test first
+passed even with a deliberate leak, because it only varied actual goals -
+which the model doesn't read. It now varies every input the model uses.
+
+**PM lesson:** Ship the switch when the evidence clears a pre-set bar
+(beat 0.321-ish on the same matches), not when the new thing feels more
+sophisticated. And make the output explainable: a breakdown turns "trust
+me" into "here's why", which matters more for a decision tool than a
+slightly better number.

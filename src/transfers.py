@@ -28,8 +28,7 @@ close enough for comparing options but not exact to the pound.
 import pandas as pd
 
 from src import fetch
-from src.features import build_player_features
-from src.models import project_gameweek_points
+from src.projections import get_projections
 from src.team import get_squad_projection
 
 # How tough a next-3-gameweek average difficulty has to be before we flag it.
@@ -56,7 +55,7 @@ def simulate_transfer(team_id: int, out_player_id: int, in_player_id: int, gamew
     Returns a dict with the old/new squads and the projected points impact.
     """
     squad_df, picks_gw = get_squad_projection(team_id, gameweek)
-    projections = project_gameweek_points(build_player_features())
+    projections = get_projections()
     proj_by_id = projections.set_index("id")
 
     def _name(player_id: int) -> str:
@@ -140,7 +139,7 @@ def suggest_transfers(team_id: int, gameweek: int = None, max_suggestions: int =
     squad_df, picks_gw = get_squad_projection(team_id, gameweek)
     bank = _get_bank(team_id)
 
-    projections = project_gameweek_points(build_player_features())
+    projections = get_projections()
     proj_by_id = projections.set_index("id")
 
     squad_with_fixtures = squad_df.copy()
