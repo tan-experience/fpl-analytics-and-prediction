@@ -132,7 +132,17 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
         (GW3-7, same 1,469 player-matches)
   - [x] Switch the CLI, transfer suggestions and web app to it, with a
         per-player breakdown on the web app
-- [ ] Machine-learning projection, compared against the baseline
+- [x] App tabs; team ID in the web address (`?team=...`) for bookmarkable links;
+      projections saved before every deadline (to the `snapshots` branch)
+- [ ] **Best XI and formation** from your squad - and transfers judged by
+      your best XI before vs after (including whether a -4 hit pays off)
+- [ ] Season tab: rank, points and charts across gameweeks
+- [ ] Next 3 gameweeks: projections and a fixture grid coloured by the team
+      model (not FPL's 1-5 rating), and clearer suggestion explanations
+- [ ] Free hit team: best 15 within your real team value
+- [ ] Predicted vs actual, week by week (from the saved snapshots)
+- [ ] Pitch view with player cards
+- [ ] Machine-learning projection, compared against the current model
 
 ---
 

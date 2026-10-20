@@ -1,0 +1,50 @@
+# Saves the upcoming gameweek's projections every few hours, so the app can
+# later compare what it predicted with what actually happened.
+#
+# Snapshots are committed to a separate "snapshots" branch, NOT main: the live
+# Streamlit site redeploys whenever main changes, and saving every few hours
+# shouldn't restart it.
+name: snapshot
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"  # every 3 hours, at 17 minutes past (avoids the busy top of the hour)
+  workflow_dispatch:         # also allows running it by hand from the Actions tab
+
+permissions:
+  contents: write  # needed to commit to the snapshots branch
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4  # the code (main)
+
+      - uses: actions/checkout@v4  # the snapshots branch, in its own folder
+        with:
+          ref: snapshots
+          path: snapshots-branch
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Save snapshot
+        run: python -m src.snapshot --out snapshots-branch/projections
+
+      - name: Commit if anything changed
+        working-directory: snapshots-branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add projections
+          if git diff --cached --quiet; then
+            echo "No changes to save."
+          else
+            git commit -m "Projection snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi

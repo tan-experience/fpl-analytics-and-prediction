@@ -22,3 +22,14 @@ def test_non_numeric_team_id_shows_friendly_error():
     app.text_input[0].input("abc").run()
     assert not app.exception
     assert "A team ID is a number" in app.error[0].value
+
+
+def test_team_id_from_web_address_fills_the_box():
+    # ?team=... in the address should pre-fill the input (bookmarkable links).
+    # A non-number keeps this offline: it stops at the friendly error.
+    app = AppTest.from_file("../app.py")
+    app.query_params["team"] = "abc"
+    app.run()
+    assert not app.exception
+    assert app.text_input[0].value == "abc"
+    assert "A team ID is a number" in app.error[0].value

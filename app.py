@@ -83,8 +83,11 @@ st.caption(
     f"underlying stats and a team-strength model. [Source code and how accurate it is]({REPO_URL})."
 )
 
+# The team ID can come from the web address (?team=895045), so a page can be
+# bookmarked or shared and opens straight on that team. Nothing is stored.
 team_input = st.text_input(
     "Your FPL team ID",
+    value=st.query_params.get("team", ""),
     placeholder="e.g. 895045",
     help="Log in at fantasy.premierleague.com, open the Points tab, and look at "
          "the web address: .../entry/YOUR_TEAM_ID/event/...",
@@ -98,6 +101,7 @@ if not team_input.strip().isdigit():
     st.stop()
 
 team_id = int(team_input.strip())
+st.query_params["team"] = str(team_id)  # keep the address in sync, for bookmarking
 
 # ---------------------------------------------------------------- load data
 try:
@@ -115,96 +119,103 @@ except requests.RequestException:
     st.error("Couldn't reach the FPL website. Try again in a few minutes.")
     st.stop()
 
-# ---------------------------------------------------------------- squad
-st.header("Your squad")
-starters = squad_df[squad_df["is_starting"]]
-total = starters["effective_points"].sum()
+# ---------------------------------------------------------------- tabs
+# Each tab answers one question: "how's my team looking?" and "who should I
+# transfer?". More tabs (fixtures, season) get added as features are built.
+tab_team, tab_transfers = st.tabs(["My team", "Transfers"])
 
-st.metric("Projected points, starting XI", f"{total:.1f}")
-projection_gw = int(projections["gameweek"].iloc[0])
-st.caption(f"Squad as locked in for Gameweek {gameweek}, projected for Gameweek {projection_gw}.")
+with tab_team:
+    # ---------------------------------------------------------------- squad
+    st.header("Your squad")
+    starters = squad_df[squad_df["is_starting"]]
+    total = starters["effective_points"].sum()
 
-st.subheader("Starting XI")
-st.dataframe(_squad_table(starters), hide_index=True, width="stretch")
-st.subheader("Bench")
-st.dataframe(_squad_table(squad_df[~squad_df["is_starting"]]), hide_index=True, width="stretch")
+    st.metric("Projected points, starting XI", f"{total:.1f}")
+    projection_gw = int(projections["gameweek"].iloc[0])
+    st.caption(f"Squad as locked in for Gameweek {gameweek}, projected for Gameweek {projection_gw}.")
 
-with st.expander("Where do these projections come from?"):
-    st.caption('Expected points from each part of FPL scoring, before captaincy. '
-               '"Playing" is the 2 points for 60+ minutes, times the chance they play that long.')
-    breakdown = projections.set_index("id").loc[squad_df["id"]].reset_index()
-    st.dataframe(breakdown[list(BREAKDOWN_COLUMNS)].rename(columns=BREAKDOWN_COLUMNS).round(2),
-                 hide_index=True, width="stretch")
+    st.subheader("Starting XI")
+    st.dataframe(_squad_table(starters), hide_index=True, width="stretch")
+    st.subheader("Bench")
+    st.dataframe(_squad_table(squad_df[~squad_df["is_starting"]]), hide_index=True, width="stretch")
 
-# ---------------------------------------------------------------- suggestions
-st.header("Transfer suggestions")
-st.caption("Starters not expected to play, or below their position's average with a tough run of fixtures ahead.")
+    with st.expander("Where do these projections come from?"):
+        st.caption('Expected points from each part of FPL scoring, before captaincy. '
+                   '"Playing" is the 2 points for 60+ minutes, times the chance they play that long.')
+        breakdown = projections.set_index("id").loc[squad_df["id"]].reset_index()
+        st.dataframe(breakdown[list(BREAKDOWN_COLUMNS)].rename(columns=BREAKDOWN_COLUMNS).round(2),
+                     hide_index=True, width="stretch")
 
-suggestions = suggest_transfers(team_id)
-if not suggestions:
-    st.success("Nothing flagged - your starters look fine on form and fixtures for now.")
-for s in suggestions:
-    gain = s["in_projected_points"] - s["out_projected_points"]
-    st.markdown(
-        f"**{s['out_name']} → {s['in_name']}** &nbsp; +{gain:.2f} pts, "
-        f"cost {_money(s['cost_diff'])}  \n*Reason: {s['reason']}*"
+with tab_transfers:
+    # ---------------------------------------------------------------- suggestions
+    st.header("Transfer suggestions")
+    st.caption("Starters not expected to play, or below their position's average with a tough run of fixtures ahead.")
+
+    suggestions = suggest_transfers(team_id)
+    if not suggestions:
+        st.success("Nothing flagged - your starters look fine on form and fixtures for now.")
+    for s in suggestions:
+        gain = s["in_projected_points"] - s["out_projected_points"]
+        st.markdown(
+            f"**{s['out_name']} → {s['in_name']}** &nbsp; +{gain:.2f} pts, "
+            f"cost {_money(s['cost_diff'])}  \n*Reason: {s['reason']}*"
+        )
+
+    # ---------------------------------------------------------------- what-if
+    st.header("Try a transfer")
+    st.caption("Pick a player to sell; the second list shows same-position players you could buy.")
+
+    players_by_id = projections.set_index("id")
+
+    # Start the dropdowns on the top suggestion (if there is one), so the
+    # suggestions above and this section connect - rather than defaulting to
+    # whoever happens to be first in the squad list (often your captain).
+    top = suggestions[0] if suggestions else None
+
+    out_options = list(squad_df["id"])
+    out_id = st.selectbox(
+        "Transfer out",
+        options=out_options,
+        index=out_options.index(top["out_id"]) if top else 0,
+        format_func=lambda pid: _player_label(players_by_id.loc[pid]),
+    )
+    out_position = players_by_id.loc[out_id, "position"]
+
+    candidates = projections[
+        (projections["position"] == out_position)
+        & (~projections["id"].isin(squad_df["id"]))
+    ].sort_values("projected_points", ascending=False)
+
+    in_options = list(candidates["id"])
+    suggested_in = top["in_id"] if top and top["out_id"] == out_id else None
+    in_id = st.selectbox(
+        "Transfer in",
+        options=in_options,
+        index=in_options.index(suggested_in) if suggested_in in in_options else 0,
+        format_func=lambda pid: _player_label(players_by_id.loc[pid]),
     )
 
-# ---------------------------------------------------------------- what-if
-st.header("Try a transfer")
-st.caption("Pick a player to sell; the second list shows same-position players you could buy.")
-
-players_by_id = projections.set_index("id")
-
-# Start the dropdowns on the top suggestion (if there is one), so the
-# suggestions above and this section connect - rather than defaulting to
-# whoever happens to be first in the squad list (often your captain).
-top = suggestions[0] if suggestions else None
-
-out_options = list(squad_df["id"])
-out_id = st.selectbox(
-    "Transfer out",
-    options=out_options,
-    index=out_options.index(top["out_id"]) if top else 0,
-    format_func=lambda pid: _player_label(players_by_id.loc[pid]),
-)
-out_position = players_by_id.loc[out_id, "position"]
-
-candidates = projections[
-    (projections["position"] == out_position)
-    & (~projections["id"].isin(squad_df["id"]))
-].sort_values("projected_points", ascending=False)
-
-in_options = list(candidates["id"])
-suggested_in = top["in_id"] if top and top["out_id"] == out_id else None
-in_id = st.selectbox(
-    "Transfer in",
-    options=in_options,
-    index=in_options.index(suggested_in) if suggested_in in in_options else 0,
-    format_func=lambda pid: _player_label(players_by_id.loc[pid]),
-)
-
-try:
-    result = simulate_transfer(team_id, out_player_id=out_id, in_player_id=in_id)
-except ValueError as e:
-    # Expected problems, e.g. not enough money in the bank.
-    st.warning(str(e))
-else:
-    col1, col2 = st.columns(2)
-    col1.metric(
-        "Starting XI projection",
-        f"{result['new_starting_total']:.1f}",
-        delta=f"{result['projected_gain']:+.2f} pts",
-    )
-    col2.metric("Left in the bank", f"£{result['remaining_bank']:.1f}m",
-                delta=_money(-result["cost_diff"]))
-    note = result["new_squad"].get("_note")
-    if note is not None and note.notna().any():
-        st.info(note.dropna().iloc[0])
-    compare = players_by_id.loc[[out_id, in_id]].reset_index()
-    st.dataframe(compare[list(BREAKDOWN_COLUMNS)].rename(columns=BREAKDOWN_COLUMNS).round(2),
-                 hide_index=True, width="stretch")
-    st.caption("Sell price is assumed to equal the current price; FPL's real rule can differ slightly.")
+    try:
+        result = simulate_transfer(team_id, out_player_id=out_id, in_player_id=in_id)
+    except ValueError as e:
+        # Expected problems, e.g. not enough money in the bank.
+        st.warning(str(e))
+    else:
+        col1, col2 = st.columns(2)
+        col1.metric(
+            "Starting XI projection",
+            f"{result['new_starting_total']:.1f}",
+            delta=f"{result['projected_gain']:+.2f} pts",
+        )
+        col2.metric("Left in the bank", f"£{result['remaining_bank']:.1f}m",
+                    delta=_money(-result["cost_diff"]))
+        note = result["new_squad"].get("_note")
+        if note is not None and note.notna().any():
+            st.info(note.dropna().iloc[0])
+        compare = players_by_id.loc[[out_id, in_id]].reset_index()
+        st.dataframe(compare[list(BREAKDOWN_COLUMNS)].rename(columns=BREAKDOWN_COLUMNS).round(2),
+                     hide_index=True, width="stretch")
+        st.caption("Sell price is assumed to equal the current price; FPL's real rule can differ slightly.")
 
 # ---------------------------------------------------------------- footer
 st.divider()
