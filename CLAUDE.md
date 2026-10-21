@@ -14,8 +14,8 @@ tan-experience/fpl-analytics-and-prediction). Built in phases:
 Next up (agreed plan, in order): app tabs + team ID in URL + projection
 snapshots → best-XI picker with formation options, transfers judged by
 best XI before/after, and -4 hit evaluation → Season tab (rank, points,
-charts across gameweeks) — all done; next: 3-gameweek projections + fixture grid coloured
-by our team model + better suggestion explanations → free hit team (budget
+charts across gameweeks) → 3-gameweek projections, fixture grid (green/red, user's
+choice; keep numbers in cells) and 3-gameweek transfer plans — all done; next: free hit team (budget
 = the user's real team value) → predicted-vs-actual page → pitch view with
 player cards. No login: everything comes from public data by team ID, and
 nothing user-specific is saved.

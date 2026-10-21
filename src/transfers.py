@@ -34,7 +34,7 @@ import pandas as pd
 
 from src import fetch
 from src.lineup import best_total, best_xi, formation_options, squad_limits
-from src.projections import get_projections
+from src.projections import HORIZON, get_horizon_projections, get_projections
 from src.team import get_squad_projection
 
 # FPL's cost of each transfer beyond your free ones.
@@ -144,11 +144,11 @@ def simulate_transfer(team_id: int, out_player_id: int, in_player_id: int, gamew
     }
 
 
-def _points_by_position(rows) -> dict:
-    """{position: [projected points]} for best_total()."""
+def _points_by_position(rows, week: str) -> dict:
+    """{position: [projected points in `week`]} for best_total()."""
     by_pos = {}
     for row in rows:
-        by_pos.setdefault(row["position"], []).append(row["projected_points"])
+        by_pos.setdefault(row["position"], []).append(row[week])
     return by_pos
 
 
@@ -161,31 +161,43 @@ def _clubs_ok(rows, club_limit: int) -> bool:
 
 
 def search_transfers(squad: pd.DataFrame, projections: pd.DataFrame, bank: float,
-                     limits: dict, club_limit: int) -> dict:
+                     limits: dict, club_limit: int, weeks: list = None) -> dict:
     """
     Searches transfers for a squad, scoring each by how much it improves
     the best XI (formation and captain chosen each time).
 
+    weeks: the projection columns to judge over - e.g. ["xp_gw8", "xp_gw9",
+    "xp_gw10"] for the next 3 gameweeks. The best XI is re-picked for EACH
+    week (you can change your lineup every week, and a blank or double
+    gameweek changes who should start), and the weekly gains are added up.
+    Defaults to ["projected_points"] - just the next gameweek.
+
     Returns:
-      base_total  the best XI's projected points now
+      base_total  the best XI's projected points now (summed over the weeks)
       singles     DataFrame, one row per player you could sell: their best
-                  legal replacement and the gain (best first)
+                  legal replacement, the gain, and per-week points
       best_pair   dict for the best combination of two transfers (or None)
 
     "Legal" = same position, affordable (with the bank - and for pairs, the
     money from both sales together), at most club_limit per club, and the
     incoming player isn't injured/suspended/gone.
     """
-    cols = ["id", "web_name", "team", "position", "now_cost", "projected_points"]
+    weeks = weeks or ["projected_points"]
+    cols = ["id", "web_name", "team", "position", "now_cost", *weeks]
     squad_rows = squad[cols].to_dict("records")
-    base_total = best_total(_points_by_position(squad_rows), limits)
     owned = set(squad["id"])
 
-    # Possible replacements per position, best projected first.
-    pool = projections[~projections["id"].isin(owned) & ~projections["status"].isin(UNAVAILABLE)
-                       & (projections["projected_points"] > 0)]
+    def _total(rows):
+        return sum(best_total(_points_by_position(rows, week), limits) for week in weeks)
+
+    base_total = _total(squad_rows)
+
+    # Possible replacements per position, best over the whole period first.
+    pool = projections[~projections["id"].isin(owned) & ~projections["status"].isin(UNAVAILABLE)].copy()
+    pool["_period"] = pool[weeks].sum(axis=1)
+    pool = pool[pool["_period"] > 0]
     pool_by_position = {
-        pos: group.sort_values("projected_points", ascending=False)[cols].to_dict("records")
+        pos: group.sort_values("_period", ascending=False)[cols].to_dict("records")
         for pos, group in pool.groupby("position")
     }
 
@@ -194,31 +206,42 @@ def search_transfers(squad: pd.DataFrame, projections: pd.DataFrame, bank: float
         rows = [r for r in squad_rows if r["id"] not in outs] + list(ins)
         if not _clubs_ok(rows, club_limit):
             return None
-        return best_total(_points_by_position(rows), limits)
+        return _total(rows)
 
-    # ---- singles: for each player sold, the best legal replacement.
-    # A better-projected replacement can never lower the best XI, so the
-    # first legal one in the (best-first) pool is the best for that player.
+    # ---- singles: for each player sold, the best legal replacement among
+    # the top candidates. (Over one week the first legal candidate is always
+    # best; over several weeks it usually is, but a player who's strong in
+    # the weeks that matter can beat one with a slightly higher total.)
     singles = []
     for out in squad_rows:
+        best = None
+        tried = 0
         for cand in pool_by_position.get(out["position"], []):
             if cand["now_cost"] - out["now_cost"] > bank + 1e-9:
                 continue
             total = _total_after({out["id"]}, [cand])
             if total is None:
                 continue
+            if best is None or total > best[0] + 1e-9:
+                best = (total, cand)
+            tried += 1
+            if tried >= CANDIDATES_PER_PLAYER:
+                break
+        if best:
+            total, cand = best
             singles.append({
                 "out_id": out["id"], "out_name": out["web_name"],
-                "out_projected_points": out["projected_points"],
-                "in_id": cand["id"], "in_name": cand["web_name"],
-                "in_projected_points": cand["projected_points"],
+                "out_projected_points": sum(out[w] for w in weeks),
+                "out_weeks": [out[w] for w in weeks],
+                "in_id": cand["id"], "in_name": cand["web_name"], "in_team": cand["team"],
+                "in_projected_points": sum(cand[w] for w in weeks),
+                "in_weeks": [cand[w] for w in weeks],
                 "cost_diff": round(cand["now_cost"] - out["now_cost"], 1),
                 "gain": total - base_total,
             })
-            break
     singles = pd.DataFrame(singles, columns=[
-        "out_id", "out_name", "out_projected_points", "in_id", "in_name",
-        "in_projected_points", "cost_diff", "gain",
+        "out_id", "out_name", "out_projected_points", "out_weeks", "in_id", "in_name", "in_team",
+        "in_projected_points", "in_weeks", "cost_diff", "gain",
     ]).sort_values("gain", ascending=False, kind="stable").reset_index(drop=True)
 
     # ---- pairs: two players sold, two bought, with the budget shared.
@@ -245,6 +268,9 @@ def search_transfers(squad: pd.DataFrame, projections: pd.DataFrame, bank: float
     if best_pair:
         new_squad = squad[~squad["id"].isin([o["id"] for o in best_pair["outs"]])][cols]
         new_squad = pd.concat([new_squad, pd.DataFrame(best_pair["ins"])], ignore_index=True)
+        # The formation shown is for the first week - the lineup you'd pick now.
+        new_squad = new_squad.rename(columns={weeks[0]: "projected_points"}) \
+            if weeks[0] != "projected_points" else new_squad
         best_pair = {
             "out_ids": [o["id"] for o in best_pair["outs"]],
             "out_names": [o["web_name"] for o in best_pair["outs"]],
@@ -256,7 +282,7 @@ def search_transfers(squad: pd.DataFrame, projections: pd.DataFrame, bank: float
             "formation_after": best_xi(new_squad, limits)["formation"],
         }
 
-    return {"base_total": base_total, "singles": singles, "best_pair": best_pair}
+    return {"base_total": base_total, "singles": singles, "best_pair": best_pair, "weeks": weeks}
 
 
 def plan_transfers(search: dict, free_transfers: int = 1) -> dict:
@@ -292,23 +318,88 @@ def plan_transfers(search: dict, free_transfers: int = 1) -> dict:
             "free_transfers": free_transfers}
 
 
-def explain(row) -> str:
-    """Plain-English reason for a single-transfer suggestion."""
-    if row["out_projected_points"] <= 0:
-        return f"{row['out_name']} isn't expected to play"
-    return (f"{row['in_name']} projects {row['in_projected_points']:.1f} pts "
-            f"vs {row['out_name']}'s {row['out_projected_points']:.1f}")
+def _weeks_text(values) -> str:
+    """e.g. [6.05, 5.49, 5.99] -> '6.1 / 5.5 / 6.0'."""
+    return " / ".join(f"{v:.1f}" for v in values)
 
 
-def transfer_search_for_team(team_id: int, gameweek: int = None) -> dict:
-    """search_transfers() for a real team, using its squad and bank from the API."""
-    squad_df, _ = get_squad_projection(team_id, gameweek)
-    club_limit = (fetch.get_bootstrap_static()["game_config"]["rules"]["squad_team_limit"]
-                  if CLUB_LIMIT is None else CLUB_LIMIT)
-    return search_transfers(squad_df, get_projections(), _get_bank(team_id), squad_limits(), club_limit)
+def explain(row, gameweeks: list = None, fixtures: dict = None) -> str:
+    """
+    Plain-English reason for a single-transfer suggestion. Over several
+    gameweeks it shows both players' week-by-week projections, and (if
+    `fixtures` = {team: [opponent labels]} is given) the new player's fixtures.
+    """
+    out_weeks = row.get("out_weeks") or [row["out_projected_points"]]
+    in_weeks = row.get("in_weeks") or [row["in_projected_points"]]
+    if len(in_weeks) == 1:
+        if row["out_projected_points"] <= 0:
+            return f"{row['out_name']} isn't expected to play"
+        return (f"{row['in_name']} projects {row['in_projected_points']:.1f} pts "
+                f"vs {row['out_name']}'s {row['out_projected_points']:.1f}")
+
+    span = f"GW{gameweeks[0]}-{gameweeks[-1]}" if gameweeks else f"next {len(in_weeks)} gameweeks"
+    if sum(out_weeks) <= 0:
+        reason = f"{row['out_name']} isn't expected to play. "
+    elif out_weeks[0] <= 0:
+        reason = f"{row['out_name']} isn't expected to play next gameweek. "
+    else:
+        reason = ""
+    reason += (f"{row['in_name']} {_weeks_text(in_weeks)} vs {row['out_name']} "
+               f"{_weeks_text(out_weeks)} ({span})")
+    team = row.get("in_team")
+    if fixtures and team in fixtures:
+        reason += f"; fixtures: {', '.join(fixtures[team])}"
+    return reason
 
 
-def suggestions_from_search(search: dict, max_suggestions: int = 3) -> list:
+def _squad_and_pool(team_id: int, horizon: int):
+    """The team's squad and the player pool, with one projection column per week."""
+    squad_df, _ = get_squad_projection(team_id)
+    if horizon == 1:
+        return squad_df, get_projections(), ["projected_points"], None
+    horizon_table = get_horizon_projections(horizon)
+    gameweeks = horizon_table.attrs["gameweeks"]
+    weeks = [f"xp_gw{gw}" for gw in gameweeks]
+    squad = squad_df[["id", "web_name", "team", "position", "now_cost"]].merge(
+        horizon_table[["id", *weeks]], on="id", how="left").fillna({w: 0.0 for w in weeks})
+    return squad, horizon_table, weeks, gameweeks
+
+
+def _club_limit() -> int:
+    return (fetch.get_bootstrap_static()["game_config"]["rules"]["squad_team_limit"]
+            if CLUB_LIMIT is None else CLUB_LIMIT)
+
+
+def transfer_search_for_team(team_id: int, horizon: int = HORIZON) -> dict:
+    """
+    search_transfers() for a real team, using its squad and bank from the
+    API, judged over the next `horizon` gameweeks (1 = next gameweek only).
+    The result also records which gameweeks were covered ("gameweeks").
+    """
+    squad, pool, weeks, gameweeks = _squad_and_pool(team_id, horizon)
+    result = search_transfers(squad, pool, _get_bank(team_id), squad_limits(), _club_limit(), weeks)
+    result["gameweeks"] = gameweeks
+    return result
+
+
+def transfer_gain_over_horizon(team_id: int, out_player_id: int, in_player_id: int,
+                               horizon: int = HORIZON) -> dict:
+    """
+    For the what-if: how much one transfer adds to the best XI in each of
+    the next `horizon` gameweeks (lineup re-picked every week), and in total.
+    Assumes the transfer is legal - simulate_transfer() checks that.
+    """
+    squad, pool, weeks, gameweeks = _squad_and_pool(team_id, horizon)
+    limits = squad_limits()
+    before = squad.to_dict("records")
+    incoming = pool[pool["id"] == in_player_id].iloc[0].to_dict()
+    after = [r for r in before if r["id"] != out_player_id] + [incoming]
+    per_week = [best_total(_points_by_position(after, w), limits)
+                - best_total(_points_by_position(before, w), limits) for w in weeks]
+    return {"gameweeks": gameweeks, "per_week": per_week, "total": sum(per_week)}
+
+
+def suggestions_from_search(search: dict, max_suggestions: int = 3, fixtures: dict = None) -> list:
     """
     The best single transfers from a search_transfers() result, as dicts with
     out/in ids and names, projections, cost_diff, gain and a plain-English
@@ -316,12 +407,13 @@ def suggestions_from_search(search: dict, max_suggestions: int = 3) -> list:
     """
     singles = search["singles"]
     singles = singles[singles["gain"] > 0.05].head(max_suggestions)
-    return [{**row, "reason": explain(row)} for row in singles.to_dict("records")]
+    gameweeks = search.get("gameweeks")
+    return [{**row, "reason": explain(row, gameweeks, fixtures)} for row in singles.to_dict("records")]
 
 
-def suggest_transfers(team_id: int, gameweek: int = None, max_suggestions: int = 3) -> list:
+def suggest_transfers(team_id: int, max_suggestions: int = 3, horizon: int = HORIZON) -> list:
     """The best single transfers for a team, ranked by how much they improve the best XI."""
-    return suggestions_from_search(transfer_search_for_team(team_id, gameweek), max_suggestions)
+    return suggestions_from_search(transfer_search_for_team(team_id, horizon), max_suggestions)
 
 
 if __name__ == "__main__":
@@ -330,7 +422,7 @@ if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     TEAM_ID = 895045  # example: overall FPL leader after GW5 - swap in your own ID
 
-    search = transfer_search_for_team(TEAM_ID)
+    search = transfer_search_for_team(TEAM_ID)  # next 3 gameweeks
     print(f"Best XI now: {search['base_total']:.1f} projected points\n")
     for i, s in enumerate(suggestions_from_search(search), start=1):
         print(f"{i}. {s['out_name']} -> {s['in_name']}  (+{s['gain']:.2f}, {s['reason']})")

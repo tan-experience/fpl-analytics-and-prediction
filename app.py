@@ -34,6 +34,7 @@ from src.transfers import (
     plan_transfers,
     simulate_transfer,
     suggestions_from_search,
+    transfer_gain_over_horizon,
     transfer_search_for_team,
 )
 
@@ -90,6 +91,19 @@ def _squad_table(squad_df):
         axis=1,
     )
     return table[list(SQUAD_COLUMNS)].rename(columns=SQUAD_COLUMNS)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_search(team_id: int, horizon: int) -> dict:
+    """The transfer search, kept for 10 minutes so changing other options is instant."""
+    return transfer_search_for_team(team_id, horizon)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_fixture_labels() -> dict:
+    """{team: ["EVE (H)", "LIV (A)", ...]} for the next 3 gameweeks, for suggestion explanations."""
+    grid = upcoming_grid()[0]
+    return {team: list(rows.sort_values("gameweek")["label"]) for team, rows in grid.groupby("team")}
 
 
 # ---------------------------------------------------------------- header
@@ -190,39 +204,50 @@ with tab_team:
 
 with tab_transfers:
     # ---------------------------------------------------------------- suggestions
-    st.header("This gameweek's transfer plan")
-    free_transfers = st.selectbox(
+    st.header("Transfer plan")
+    col1, col2 = st.columns(2)
+    horizon_label = col1.radio(
+        "Judge transfers over", ["Next 3 gameweeks", "Next gameweek only"], horizontal=True,
+        help="A new player keeps scoring for weeks, so judging over 3 gameweeks values "
+             "transfers - and hits - more realistically. Your best XI is re-picked each week.",
+    )
+    horizon = 3 if horizon_label.startswith("Next 3") else 1
+    free_transfers = col2.selectbox(
         "Free transfers available", options=[0, 1, 2, 3, 4, 5], index=1,
         help="Check the Transfers page in the FPL app. Each transfer beyond your free ones costs 4 points.",
     )
 
     # One search, used for the plan, the suggestions and the what-if defaults.
+    # Cached, so changing "free transfers" doesn't re-run the whole search.
     with st.spinner("Searching every transfer and pair of transfers..."):
-        search = transfer_search_for_team(team_id)
+        search = _cached_search(team_id, horizon)
     plan = plan_transfers(search, free_transfers=free_transfers)
     options = plan["options"]
     pair = search["best_pair"]
     top_single = search["singles"].iloc[0] if len(search["singles"]) else None
+    gws = search.get("gameweeks")
+    period = f"over GW{gws[0]}-{gws[-1]}" if gws else "next gameweek"
 
     if plan["recommended"] == "none":
-        st.info("**Recommendation: save your transfer.** No transfer improves your best XI "
-                "by more than it costs this week.")
+        st.info(f"**Recommendation: save your transfer.** No transfer improves your best XI "
+                f"{period} by more than it costs.")
     elif plan["recommended"] == "single":
         st.success(f"**Recommendation: {top_single['out_name']} → {top_single['in_name']}** "
-                   f"(+{options['single']['net']:.2f} pts to your best XI"
+                   f"(+{options['single']['net']:.2f} pts to your best XI {period}"
                    + (f", after a -{options['single']['hit']} hit" if options["single"]["hit"] else "") + ")")
     else:
         st.success(f"**Recommendation: two transfers** - {pair['out_names'][0]} → {pair['in_names'][0]} "
                    f"and {pair['out_names'][1]} → {pair['in_names'][1]} "
-                   f"(+{options['pair']['gain']:.2f} pts"
+                   f"(+{options['pair']['gain']:.2f} pts {period}"
                    + (f", -{options['pair']['hit']} hit = {options['pair']['net']:+.2f}" if options["pair"]["hit"] else "")
-                   + f"; best formation {pair['formation_after']})")
+                   + f"; best formation next gameweek {pair['formation_after']})")
 
     if plan["hit_worth_it"] is not None:
         extra = options["pair"]["gain"] - options["single"]["gain"]
         verdict = "worth it" if plan["hit_worth_it"] else "not worth it"
         st.write(f"**Is a -4 hit worth it?** {verdict.capitalize()}: a second transfer adds "
-                 f"{extra:+.2f} pts, against the {options['pair']['hit'] - options['single']['hit']}-point cost.")
+                 f"{extra:+.2f} pts {period}, against the "
+                 f"{options['pair']['hit'] - options['single']['hit']}-point cost.")
 
     with st.expander("Compare the options"):
         rows = [{"Plan": "No transfer", "Gain": 0.0, "Hit": 0, "Net": 0.0}]
@@ -236,16 +261,20 @@ with tab_transfers:
                          "Gain": options["pair"]["gain"], "Hit": -options["pair"]["hit"],
                          "Net": options["pair"]["net"]})
         st.dataframe(pd.DataFrame(rows).round(2), hide_index=True, width="stretch")
-    st.caption("⚠️ Based on next gameweek only. A new player keeps scoring for weeks, so this "
-               "undervalues transfers - hits especially. Multi-gameweek projections are coming.")
+    if horizon == 1:
+        st.caption("⚠️ Next gameweek only. A new player keeps scoring for weeks, so this "
+                   "undervalues transfers - hits especially. Try \"Next 3 gameweeks\".")
+    else:
+        st.caption(f"Judged {period}, with your best XI and captain re-picked each week. "
+                   "A -4 hit is paid once.")
 
     st.subheader("Best single transfers")
-    suggestions = suggestions_from_search(search)
+    suggestions = suggestions_from_search(search, fixtures=_cached_fixture_labels())
     if not suggestions:
-        st.write("No single transfer improves your best XI this week.")
+        st.write(f"No single transfer improves your best XI {period}.")
     for s in suggestions:
         st.markdown(
-            f"**{s['out_name']} → {s['in_name']}** &nbsp; +{s['gain']:.2f} pts to your best XI, "
+            f"**{s['out_name']} → {s['in_name']}** &nbsp; +{s['gain']:.2f} pts to your best XI {period}, "
             f"cost {_money(s['cost_diff'])}  \n*{s['reason']}*"
         )
 
@@ -290,16 +319,22 @@ with tab_transfers:
         st.warning(str(e))
     else:
         before, after = result["before"], result["after"]
-        col1, col2 = st.columns(2)
+        horizon_gain = transfer_gain_over_horizon(team_id, out_id, in_id)
+        hg = horizon_gain["gameweeks"]
+        col1, col2, col3 = st.columns(3)
         col1.metric(
-            f"Best XI: {before['formation']} → {after['formation']}",
+            f"Next gameweek: {before['formation']} → {after['formation']}",
             f"{result['new_starting_total']:.1f}",
             delta=f"{result['projected_gain']:+.2f} pts",
         )
-        col2.metric("Left in the bank", f"£{result['remaining_bank']:.1f}m",
+        col2.metric(f"Over GW{hg[0]}-{hg[-1]}", f"{horizon_gain['total']:+.2f} pts",
+                    help="Gain to your best XI in each week: "
+                         + ", ".join(f"GW{g} {v:+.1f}" for g, v in zip(hg, horizon_gain["per_week"])))
+        col3.metric("Left in the bank", f"£{result['remaining_bank']:.1f}m",
                     delta=_money(-result["cost_diff"]))
         st.caption("Compares your best possible XI (formation and captain chosen for you) "
-                   "before and after the transfer.")
+                   "before and after the transfer - for next gameweek, and added up over "
+                   "the next 3 with the lineup re-picked each week.")
         if result["joins_xi"] or result["leaves_xi"]:
             st.write(f"**Lineup change:** {', '.join(result['joins_xi']) or 'nobody'} starts; "
                      f"{', '.join(result['leaves_xi']) or 'nobody'} drops out of the XI.")
@@ -354,7 +389,7 @@ with tab_fixtures:
         )
         st.dataframe(styled, width="stretch", height=38 * (len(text) + 1))
         st.caption(
-            "**Blue = easier than an average fixture, red = harder, grey = about average.** "
+            "**Green = easier than an average fixture, red = harder, grey = about average.** "
             + ("Numbers are the team's expected goals" if attack else "Numbers are the team's clean-sheet chance")
             + " from our team-strength model - not FPL's 1-5 difficulty rating, which barely predicts "
             "goals in our backtests. Double gameweeks show both opponents; \"—\" means no match."

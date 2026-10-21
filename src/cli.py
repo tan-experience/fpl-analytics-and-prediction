@@ -135,7 +135,7 @@ def _format_squad(squad_df) -> str:
     )
 
 
-def show_squad_and_suggestions(team_id: int, free_transfers: int = 1) -> None:
+def show_squad_and_suggestions(team_id: int, free_transfers: int = 1, horizon: int = 3) -> None:
     """Default mode: squad projection, then the transfer plan and suggestions."""
     squad_df, gameweek = get_squad_projection(team_id)
     total = squad_df.loc[squad_df["is_starting"], "effective_points"].sum()
@@ -147,9 +147,11 @@ def show_squad_and_suggestions(team_id: int, free_transfers: int = 1) -> None:
     print(f"\nProjected starting XI total: {total:.1f} points")
     print("(Proj = expected FPL points, Eff = after captain/bench multiplier)\n")
 
-    search = transfer_search_for_team(team_id)
+    search = transfer_search_for_team(team_id, horizon)
     plan = plan_transfers(search, free_transfers=free_transfers)
-    print(f"Transfer plan with {free_transfers} free transfer(s) "
+    gws = search.get("gameweeks")
+    period = f"over GW{gws[0]}-{gws[-1]}" if gws else "next gameweek only"
+    print(f"Transfer plan with {free_transfers} free transfer(s), {period} "
           f"(gain to your best XI, after any -4 hits):")
     labels = {"none": "No transfer"}
     if len(search["singles"]):
@@ -163,12 +165,15 @@ def show_squad_and_suggestions(team_id: int, free_transfers: int = 1) -> None:
         marker = "  <- recommended" if name == plan["recommended"] else ""
         print(f"  {labels[name]:45} gain {option['gain']:+.2f}  hit -{option['hit']}  "
               f"net {option['net']:+.2f}{marker}")
-    print("  (Next gameweek only - this undervalues transfers, hits especially.)\n")
+    if gws:
+        print("  (Best XI and captain re-picked each week; a -4 hit is paid once.)\n")
+    else:
+        print("  (Next gameweek only - this undervalues transfers, hits especially.)\n")
 
     print("Best single transfers:")
     suggestions = suggestions_from_search(search)
     if not suggestions:
-        print("  No single transfer improves your best XI this week.")
+        print(f"  No single transfer improves your best XI {period}.")
         return
 
     for i, s in enumerate(suggestions, start=1):
@@ -231,6 +236,8 @@ def main(argv=None) -> int:
     # `in` is a reserved word in Python, so we store it under a different name.
     parser.add_argument("--in", dest="in_player",
                         help="Player to transfer in (name or ID). Use with --out.")
+    parser.add_argument("--horizon", type=int, default=3, choices=[1, 3],
+                        help="Judge transfers over the next 3 gameweeks (default) or just the next one.")
     parser.add_argument("--free-transfers", type=int, default=1, choices=range(0, 6),
                         help="How many free transfers you have (0-5, default 1). "
                              "Used to decide whether a -4 hit is worth it.")
@@ -244,7 +251,7 @@ def main(argv=None) -> int:
         if args.out_player:
             show_what_if(args.team, args.out_player, args.in_player)
         else:
-            show_squad_and_suggestions(args.team, args.free_transfers)
+            show_squad_and_suggestions(args.team, args.free_transfers, args.horizon)
     except ValueError as e:
         # Expected problems (unknown player, illegal swap, over budget) get a
         # clean one-line message instead of a scary Python traceback.

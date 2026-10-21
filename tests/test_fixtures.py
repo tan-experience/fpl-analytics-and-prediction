@@ -51,8 +51,8 @@ def test_fixture_score_is_relative_to_an_average_match():
     assert fixture_score(0.0, average=1.35) == pytest.approx(-1.0)  # blank: clipped to the worst
 
 
-def test_cell_colour_blue_good_red_bad_grey_neutral():
-    assert "42, 120, 214" in cell_colour(0.8, mode="light")    # blue = good
+def test_cell_colour_green_good_red_bad_grey_neutral():
+    assert "0, 131, 0" in cell_colour(0.8, mode="light")       # green = good
     assert "227, 73, 72" in cell_colour(-0.8, mode="light")    # red = hard
     assert cell_colour(0.0, mode="light") == cell_colour(0.01, mode="light")  # tiny = neutral
     strong, weak = cell_colour(1.0, mode="dark"), cell_colour(0.3, mode="dark")

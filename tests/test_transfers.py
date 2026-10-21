@@ -24,6 +24,15 @@ def fake_api(monkeypatch, players):
     monkeypatch.setattr(transfers, "get_squad_projection", lambda team_id, gw=None: (state["squad"], 5))
     monkeypatch.setattr(transfers, "_get_bank", lambda team_id: BANK)
     monkeypatch.setattr(transfers, "get_projections", lambda: players)
+
+    def fake_horizon(weeks=3):
+        # Every week the same as next week, for GW8-10 - so 3-week gains are 3x.
+        table = players.copy()
+        for gw in (8, 9, 10):
+            table[f"xp_gw{gw}"] = table["projected_points"]
+        table.attrs["gameweeks"] = [8, 9, 10]
+        return table
+    monkeypatch.setattr(transfers, "get_horizon_projections", fake_horizon)
     monkeypatch.setattr(transfers, "squad_limits",
                         lambda: {"GKP": (1, 1), "DEF": (3, 5), "MID": (2, 5), "FWD": (1, 3)})
     monkeypatch.setattr(transfers, "CLUB_LIMIT", 3)
@@ -36,14 +45,31 @@ def fake_api(monkeypatch, players):
 def test_suggestions_ranked_by_best_xi_gain_with_reasons(fake_api, players):
     # See test_transfer_search.py for the worked numbers on this squad.
     fake_api(make_squad(players, FULL_SQUAD, captain_id=4))
-    # Top 5: DefD/DefE -> DefF tie at +4.0; DefC -> DefF and Palmer -> Saka tie at +3.5.
-    suggestions = transfers.suggest_transfers(team_id=1, max_suggestions=5)
+    # Next gameweek only. Top 5: DefD/DefE -> DefF tie at +4.0; DefC -> DefF and Palmer -> Saka at +3.5.
+    suggestions = transfers.suggest_transfers(team_id=1, max_suggestions=5, horizon=1)
     assert suggestions[0]["in_name"] == "DefF"
     assert suggestions[0]["gain"] == pytest.approx(4.0)
     palmer = next(s for s in suggestions if s["out_name"] == "Palmer")
     assert palmer["in_name"] == "Saka"
     assert palmer["reason"] == "Palmer isn't expected to play"
     assert suggestions[0]["reason"].startswith("DefF projects 6.5 pts vs")
+
+
+def test_three_gameweek_suggestions_show_each_week(fake_api, players):
+    fake_api(make_squad(players, FULL_SQUAD, captain_id=4))
+    suggestions = transfers.suggest_transfers(team_id=1, max_suggestions=5)  # default: 3 gameweeks
+    assert suggestions[0]["gain"] == pytest.approx(12.0)  # 4.0 in each of 3 identical weeks
+    palmer = next(s for s in suggestions if s["out_name"] == "Palmer")
+    assert palmer["reason"] == ("Palmer isn't expected to play. "
+                                "Saka 6.0 / 6.0 / 6.0 vs Palmer 0.0 / 0.0 / 0.0 (GW8-10)")
+
+
+def test_transfer_gain_over_horizon_week_by_week(fake_api, players):
+    fake_api(make_squad(players, FULL_SQUAD, captain_id=4))
+    result = transfers.transfer_gain_over_horizon(team_id=1, out_player_id=1, in_player_id=2)
+    assert result["gameweeks"] == [8, 9, 10]
+    assert result["per_week"] == pytest.approx([3.5, 3.5, 3.5])
+    assert result["total"] == pytest.approx(10.5)
 
 
 def test_no_suggestions_when_nothing_improves_the_best_xi(fake_api, players):

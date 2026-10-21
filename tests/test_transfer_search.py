@@ -13,6 +13,9 @@ Best XI now: 4-4-2 = 4 GK + 13 DEF + 17 MID + 11 FWD = 45, + Haaland's 8 as capt
 
 import pytest
 
+import pandas as pd
+
+from src.lineup import best_xi
 from src.transfers import plan_transfers, search_transfers
 from tests.conftest import FULL_SQUAD, make_squad
 
@@ -101,3 +104,50 @@ def test_hit_worth_it_when_the_second_transfer_gains_more_than_4(players):
     assert plan["options"]["pair"]["gain"] == pytest.approx(19.5)
     assert plan["recommended"] == "pair"
     assert plan["hit_worth_it"] is True
+
+
+# ---- over several gameweeks -------------------------------------------------
+
+def _two_weeks(players, week2=None):
+    """Copy projected_points into two weekly columns (week 2 optionally overridden)."""
+    players = players.copy()
+    players["xp_w1"] = players["projected_points"]
+    players["xp_w2"] = players["projected_points"]
+    for name, value in (week2 or {}).items():
+        players.loc[players["web_name"] == name, "xp_w2"] = value
+    return players
+
+
+def _search_weeks(players, weeks=("xp_w1", "xp_w2")):
+    squad = players[players["id"].isin(FULL_SQUAD)]
+    return search_transfers(squad, players, bank=1.0, limits=LIMITS, club_limit=3, weeks=list(weeks))
+
+
+def test_two_identical_weeks_double_the_gains(players):
+    result = _search_weeks(_two_weeks(players))
+    assert result["singles"].iloc[0]["gain"] == pytest.approx(8.0)   # 4.0 x 2
+    assert result["best_pair"]["gain"] == pytest.approx(14.0)        # 7.0 x 2
+
+
+def test_a_blank_week_changes_who_is_worth_buying(players):
+    # A steady midfielder (5 pts both weeks) vs Saka (6 now, then a blank week: 0).
+    steady = pd.DataFrame([{"id": 20, "web_name": "Steady", "full_name": "Steady", "team": "Brighton",
+                            "position": "MID", "now_cost": 9.0, "projected_points": 5.0,
+                            "next_3_avg_difficulty": 3.0, "status": "a"}])
+    players = pd.concat([players, steady], ignore_index=True)
+    players = _two_weeks(players, week2={"Saka": 0.0})
+    one_week = _search_weeks(players, weeks=["xp_w1"])["singles"].set_index("out_name")
+    two_weeks = _search_weeks(players)["singles"].set_index("out_name")
+    assert one_week.loc["Palmer", "in_name"] == "Saka"      # best next week
+    assert two_weeks.loc["Palmer", "in_name"] == "Steady"   # best over both weeks
+    assert two_weeks.loc["Palmer", "in_weeks"] == [5.0, 5.0]
+
+
+def test_best_xi_is_repicked_each_week(players):
+    # Raya blanks in week 2; the backup keeper should start that week.
+    players = _two_weeks(players, week2={"Raya": 0.0, "GkB": 3.0})
+    squad = players[players["id"].isin(FULL_SQUAD)]
+    # The right answer: pick the best XI separately for each week, then add up.
+    weekly = sum(best_xi(squad.assign(projected_points=squad[w]), LIMITS)["total"]
+                 for w in ("xp_w1", "xp_w2"))
+    assert _search_weeks(players)["base_total"] == pytest.approx(weekly)
