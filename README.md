@@ -63,6 +63,17 @@ Selling a *benched* midfielder still gains points, because the new one
 starts - and the best formation changes. On the web app you can pick any
 formation and see its XI.
 
+**3. Plans the week's transfers** - searches every single transfer and pair
+of transfers (budget shared, 3-per-club limit), and tells you whether a -4
+hit is worth it given your free transfers:
+
+```
+Transfer plan with 1 free transfer(s) (gain to your best XI, after any -4 hits):
+  No transfer                              gain +0.00  hit -0  net +0.00
+  Palmer -> Mbeumo                         gain +2.09  hit -0  net +2.09  <- recommended
+  Palmer -> Mbeumo, Slater -> Tavernier    gain +3.50  hit -4  net -0.50
+```
+
 ## How good are the projections?
 
 Measured, not assumed. The backtest replays past gameweeks, projects every
@@ -148,7 +159,8 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
 - [x] **Best XI and formation** from your squad, and every formation's
       total; transfers judged by your best XI before vs after (with the
       3-per-club limit enforced)
-- [ ] Transfer suggestions ranked by best-XI gain, and whether a -4 hit pays off
+- [x] Transfer plan: every single transfer and pair of transfers ranked by
+      best-XI gain, and whether a -4 hit pays off for your free transfers
 - [ ] Season tab: rank, points and charts across gameweeks
 - [ ] Next 3 gameweeks: projections and a fixture grid coloured by the team
       model (not FPL's 1-5 rating), and clearer suggestion explanations
@@ -184,8 +196,9 @@ Find your team ID in the URL of your FPL "Points" page
 (`fantasy.premierleague.com/entry/<TEAM_ID>/event/...`), then:
 
 ```bash
-# Your squad's projected points + suggested transfers
+# Your squad's projected points + this week's transfer plan
 python -m src.cli --team <TEAM_ID>
+python -m src.cli --team <TEAM_ID> --free-transfers 2
 
 # "What if" a specific transfer
 python -m src.cli --team <TEAM_ID> --out Palmer --in "Bukayo Saka"

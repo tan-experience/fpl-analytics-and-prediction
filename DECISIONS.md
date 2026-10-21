@@ -408,3 +408,47 @@ It does now (read from FPL's own rules).
 that the product is measuring the wrong thing. Fixing the measurement
 first made the requested feature fall out naturally - and set up three
 more on the same foundation.
+
+---
+
+## 2026-10 — Transfer plans and -4 hits: what to automate, what to ask
+
+**Problem:** Suggest the best transfers and say whether a -4 point "hit"
+(an extra transfer beyond your free ones) is worth it. Two sub-questions:
+how to search, and how to know the user's free transfers.
+
+**Decisions:**
+1. **Rank every transfer by best-XI gain** (formation and captain re-picked
+   each time), replacing the old rule that only flagged injured or
+   "underperforming + tough run" starters using FPL's 1-5 difficulty -
+   the weakest input the backtests found.
+2. **Search pairs of transfers with a shared budget**, so the classic move
+   - a cheaper downgrade funding an upgrade elsewhere - is found. About
+   10,000 combinations per squad; a fast "total only" version of the
+   best-XI picker (tested to agree with the full one) keeps it to ~1.5s.
+3. **Ask the user for their free transfers (0-5)** rather than calculate
+   them. The API doesn't expose the banked count directly; reconstructing
+   it from transfer history and chip rules is fiddly and easy to get
+   subtly wrong, and the user can read the exact number in the FPL app in
+   a second. A wrong automatic number would silently corrupt every hit
+   recommendation.
+4. **Recommend the plan with the highest net gain** (none / single / pair,
+   after hits), ties going to fewer transfers - and state the hit verdict
+   in plain words ("a second transfer adds +1.42 pts, against the 4-point
+   cost").
+
+**Known limitation, shown on screen:** this uses next-gameweek projections
+only. A new player keeps scoring for weeks, so a one-week view undervalues
+transfers, hits especially. Multi-gameweek projections are next on the
+roadmap.
+
+**Also from testing:** several of my own hand-worked test expectations
+were wrong - the search found legitimate options I'd missed (selling a
+pricier player to fund a pair; selling one Arsenal player to buy two). The
+tests now check rules that must always hold (budget, club limit) rather
+than one assumed answer.
+
+**PM lesson:** Automate what's reliable; ask for what the user knows
+better. A one-tap input beats a clever inference that's occasionally
+wrong in a way the user can't see. And be upfront about a recommendation's
+horizon - "worth it this week" isn't "worth it".
