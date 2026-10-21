@@ -163,8 +163,9 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
       best-XI gain, and whether a -4 hit pays off for your free transfers
 - [x] Season tab: points vs FPL's average and top score, overall rank, and
       points by position across gameweeks, with plain-English takeaways
-- [ ] Next 3 gameweeks: projections and a fixture grid coloured by the team
-      model (not FPL's 1-5 rating), and clearer suggestion explanations
+- [x] Next 3 gameweeks: projections per gameweek and a fixture grid coloured
+      by the team model (not FPL's 1-5 rating), attack and defence views
+- [ ] Transfer planner and -4 hit verdict over 3 gameweeks, with clearer explanations
 - [ ] Free hit team: best 15 within your real team value
 - [ ] Predicted vs actual, week by week (from the saved snapshots)
 - [ ] Pitch view with player cards
@@ -247,6 +248,7 @@ src/
   cli.py         command-line interface
   season.py      a manager's season week by week (Season tab)
   charts.py      Season tab charts (colour-blind-safe palette, light/dark)
+  fixtures.py    upcoming-fixtures grid (Fixtures tab)
 app.py           web app (Streamlit)
 tests/           automated tests
 DECISIONS.md     product decision log

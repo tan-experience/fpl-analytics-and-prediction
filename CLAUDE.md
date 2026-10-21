@@ -36,7 +36,8 @@ decision, why, PM lesson.
 - `app.py` — Streamlit web app (display only; all calculation lives in `src/`)
 - `src/fetch.py` — all external data calls (FPL API, football-data.co.uk), cached to `data/raw/`
 - `src/features.py` — player info table + FPL fixture difficulty
-- `src/projections.py` — **the single source of projections** for the CLI, suggestions and app (cached 10 min)
+- `src/projections.py` — **the single source of projections** for the CLI, suggestions and app (cached 10 min);
+  `get_horizon_projections()` gives per-gameweek expected points for the next 3 gameweeks
 - `src/expected_points.py` — combines the parts into expected points; backtest vs the original formula
 - `src/team_strength.py` — team attack/defence ratings (Poisson), expected goals per match
 - `src/defensive_points.py` — clean-sheet and goals-conceded points
@@ -49,6 +50,7 @@ decision, why, PM lesson.
 - `src/cli.py` — command-line interface
 - `src/lineup.py` — best XI / formation / captain picker (and a fast total-only version)
 - `src/season.py` — a manager's season week by week; `src/charts.py` — its Altair charts
+- `src/fixtures.py` — upcoming-fixtures grid coloured by the team model (Fixtures tab)
 - `src/snapshot.py` — saves upcoming-gameweek projections (run by `.github/workflows/snapshot.yml`)
 - `tests/` — pytest suite, offline (small made-up tables, no API calls)
 - `DECISIONS.md` — product decision log
