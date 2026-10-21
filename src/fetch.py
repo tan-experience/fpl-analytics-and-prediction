@@ -131,6 +131,24 @@ def get_entry(team_id: int) -> dict:
     return _cached_get(f"{BASE_URL}/entry/{team_id}/", f"entry_{team_id}")
 
 
+def get_entry_history(team_id: int) -> dict:
+    """
+    A manager's season so far: one row per gameweek in "current" (points,
+    gameweek and overall rank, team value, bank, transfers, hit cost, bench
+    points), plus the chips they've used.
+    """
+    return _cached_get(f"{BASE_URL}/entry/{team_id}/history/", f"entry_{team_id}_history")
+
+
+def get_event_live(gameweek: int) -> dict:
+    """
+    Every player's stats and points in one gameweek. A finished gameweek's
+    points barely change (only bonus, briefly), so it's cached for 6 hours.
+    """
+    return _cached_get(f"{BASE_URL}/event/{gameweek}/live/", f"event_{gameweek}_live",
+                       max_age=3600 * 6)
+
+
 def get_entry_picks(team_id: int, gameweek: int) -> dict:
     """
     A manager's 15-player squad for a specific gameweek, including who's

@@ -161,7 +161,8 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
       3-per-club limit enforced)
 - [x] Transfer plan: every single transfer and pair of transfers ranked by
       best-XI gain, and whether a -4 hit pays off for your free transfers
-- [ ] Season tab: rank, points and charts across gameweeks
+- [x] Season tab: points vs FPL's average and top score, overall rank, and
+      points by position across gameweeks, with plain-English takeaways
 - [ ] Next 3 gameweeks: projections and a fixture grid coloured by the team
       model (not FPL's 1-5 rating), and clearer suggestion explanations
 - [ ] Free hit team: best 15 within your real team value
@@ -244,6 +245,8 @@ src/
   attacking_points.py  goal and assist points per player
   expected_points.py  all parts combined + backtest vs the original formula
   cli.py         command-line interface
+  season.py      a manager's season week by week (Season tab)
+  charts.py      Season tab charts (colour-blind-safe palette, light/dark)
 app.py           web app (Streamlit)
 tests/           automated tests
 DECISIONS.md     product decision log
