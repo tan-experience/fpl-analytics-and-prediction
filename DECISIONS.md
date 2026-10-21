@@ -452,3 +452,45 @@ than one assumed answer.
 better. A one-tap input beats a clever inference that's occasionally
 wrong in a way the user can't see. And be upfront about a recommendation's
 horizon - "worth it this week" isn't "worth it".
+
+---
+
+## 2026-10 — Judging transfers over 3 gameweeks, lineup re-picked each week
+
+**Problem:** The transfer planner judged every transfer on next
+gameweek only - flagged on screen as undervaluing transfers, since a new
+player keeps scoring for weeks while a -4 hit is paid once.
+
+**Options considered:**
+1. Keep one gameweek
+2. Add up each player's points over 3 gameweeks, then pick one best XI
+3. Pick the best XI **separately for each of the 3 gameweeks** and add up
+   the weekly gains
+
+**Decision:** Option 3, with 3 gameweeks as the default (1 still available).
+
+**Why:** Option 2 is simpler but wrong in exactly the weeks that matter:
+you change your lineup every week, and a blank or double gameweek changes
+who should start. A test pins this: a keeper who blanks in week 2 is
+benched for the backup that week. The fast best-XI total keeps the
+3-week search under a second.
+
+**What changed in practice** (the overall leader's squad, 1 free transfer):
+
+| | Next gameweek | Next 3 gameweeks |
+|---|---|---|
+| Best single | Palmer -> Mbeumo (+1.6) | Palmer -> Tavernier (+5.6) |
+| Two transfers, after the -4 hit | -0.9: not worth it | +6.9: **worth it** |
+
+Both the recommended player and the hit verdict flip once the horizon
+matches how long a transfer actually lasts.
+
+**Limitations, stated in the app:** FPL's injury chance only covers the
+next round but is applied to all 3 weeks; projections further ahead are
+less certain (not yet backtested 2-3 weeks out); the fixture grid uses the
+team model as it stands today.
+
+**PM lesson:** A recommendation's time horizon is part of the product,
+not a technical detail - the same data gave the opposite answer to "is
+this hit worth it?" depending on it. Pick the horizon that matches the
+decision's real consequences, and show it on screen.

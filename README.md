@@ -63,16 +63,21 @@ Selling a *benched* midfielder still gains points, because the new one
 starts - and the best formation changes. On the web app you can pick any
 formation and see its XI.
 
-**3. Plans the week's transfers** - searches every single transfer and pair
-of transfers (budget shared, 3-per-club limit), and tells you whether a -4
-hit is worth it given your free transfers:
+**3. Plans your transfers over the next 3 gameweeks** - searches every single
+transfer and pair of transfers (budget shared, 3-per-club limit), re-picks
+your best XI each week, and tells you whether a -4 hit is worth it:
 
 ```
-Transfer plan with 1 free transfer(s) (gain to your best XI, after any -4 hits):
-  No transfer                              gain +0.00  hit -0  net +0.00
-  Palmer -> Mbeumo                         gain +2.09  hit -0  net +2.09  <- recommended
-  Palmer -> Mbeumo, Slater -> Tavernier    gain +3.50  hit -4  net -0.50
+Transfer plan with 1 free transfer(s), over GW8-10:
+  No transfer                              gain +0.00   hit -0  net +0.00
+  Palmer -> Tavernier                      gain +5.63   hit -0  net +5.63
+  Palmer -> Tavernier, Slater -> Mbeumo    gain +10.92  hit -4  net +6.92  <- recommended
+
+  1. Palmer -> Tavernier (+5.63) - Tavernier 5.7 / 6.0 / 6.4 vs Palmer 4.4 / 4.1 / 4.1 (GW8-10)
 ```
+
+Judged on next gameweek alone, the same hit looked *not* worth it (-0.9) -
+see [DECISIONS.md](DECISIONS.md).
 
 ## How good are the projections?
 
@@ -165,7 +170,10 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
       points by position across gameweeks, with plain-English takeaways
 - [x] Next 3 gameweeks: projections per gameweek and a fixture grid coloured
       by the team model (not FPL's 1-5 rating), attack and defence views
-- [ ] Transfer planner and -4 hit verdict over 3 gameweeks, with clearer explanations
+- [x] Transfer planner and -4 hit verdict over 3 gameweeks (best XI re-picked
+      each week), with week-by-week explanations and fixtures
+- [x] Fixture grid in green/red like the FPL app (numbers kept in every cell for
+      colour-blind readers)
 - [ ] Free hit team: best 15 within your real team value
 - [ ] Predicted vs actual, week by week (from the saved snapshots)
 - [ ] Pitch view with player cards
@@ -200,7 +208,7 @@ Find your team ID in the URL of your FPL "Points" page
 ```bash
 # Your squad's projected points + this week's transfer plan
 python -m src.cli --team <TEAM_ID>
-python -m src.cli --team <TEAM_ID> --free-transfers 2
+python -m src.cli --team <TEAM_ID> --free-transfers 2 --horizon 3
 
 # "What if" a specific transfer
 python -m src.cli --team <TEAM_ID> --out Palmer --in "Bukayo Saka"
