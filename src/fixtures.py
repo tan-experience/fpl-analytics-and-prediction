@@ -11,10 +11,15 @@ defenders:
 - Attack:  the team's expected goals in the match
 - Defence: the team's chance of keeping a clean sheet
 
-Colour: blue = easier than an average fixture, red = harder, grey = about
-average. (Not green/red like the FPL app: red vs green is the classic
-colour-blindness problem, while blue vs red reads clearly for almost
-everyone.) The tint gets stronger the further from average.
+Colour: green = easier than an average fixture, red = harder, grey =
+about average - the same convention as the FPL app, so it reads instantly.
+The tint gets stronger the further from average.
+
+Accessibility: red vs green is the classic colour-blindness problem. The
+chosen shades were run through a colour-blindness validator: they pass in
+dark mode, and in light mode sit in the band that's acceptable only with a
+second cue - which the grid has, because every cell also shows its number
+(e.g. "51%"). Don't remove the numbers from the cells.
 """
 
 import math
@@ -32,8 +37,8 @@ MAX_RATIO = 2.0
 NEUTRAL_BAND = 0.1
 
 COLOURS = {
-    "light": {"good": (42, 120, 214), "bad": (227, 73, 72), "neutral": "#f0efec"},
-    "dark": {"good": (57, 135, 229), "bad": (230, 103, 103), "neutral": "#383835"},
+    "light": {"good": (0, 131, 0), "bad": (227, 73, 72), "neutral": "#f0efec"},
+    "dark": {"good": (0, 131, 0), "bad": (230, 103, 103), "neutral": "#383835"},
 }
 
 
@@ -79,7 +84,7 @@ def fixture_score(value: float, average: float) -> float:
 
 
 def cell_colour(score: float, mode: str = "dark") -> str:
-    """Background colour for a grid cell: blue tint (easy), red tint (hard) or neutral grey."""
+    """Background colour for a grid cell: green tint (easy), red tint (hard) or neutral grey."""
     palette = COLOURS[mode]
     if abs(score) < NEUTRAL_BAND:
         return palette["neutral"]

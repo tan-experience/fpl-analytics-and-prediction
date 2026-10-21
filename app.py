@@ -354,7 +354,7 @@ with tab_fixtures:
         )
         st.dataframe(styled, width="stretch", height=38 * (len(text) + 1))
         st.caption(
-            "**Blue = easier than an average fixture, red = harder, grey = about average.** "
+            "**Green = easier than an average fixture, red = harder, grey = about average.** "
             + ("Numbers are the team's expected goals" if attack else "Numbers are the team's clean-sheet chance")
             + " from our team-strength model - not FPL's 1-5 difficulty rating, which barely predicts "
             "goals in our backtests. Double gameweeks show both opponents; \"—\" means no match."
