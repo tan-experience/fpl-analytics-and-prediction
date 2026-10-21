@@ -23,9 +23,11 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from src.charts import points_chart, positions_chart, rank_chart
 from src.cli import _money
 from src.lineup import best_xi, formation_options
 from src.projections import get_projections
+from src.season import season_for_team
 from src.team import get_squad_projection
 from src.transfers import (
     plan_transfers,
@@ -140,8 +142,8 @@ except requests.RequestException:
 
 # ---------------------------------------------------------------- tabs
 # Each tab answers one question: "how's my team looking?" and "who should I
-# transfer?". More tabs (fixtures, season) get added as features are built.
-tab_team, tab_transfers = st.tabs(["My team", "Transfers"])
+# transfer?" and "how's my season going?". A fixtures tab comes later.
+tab_team, tab_transfers, tab_season = st.tabs(["My team", "Transfers", "Season"])
 
 with tab_team:
     # ---------------------------------------------------------------- squad
@@ -314,6 +316,51 @@ with tab_transfers:
         st.dataframe(compare[list(BREAKDOWN_COLUMNS)].rename(columns=BREAKDOWN_COLUMNS).round(2),
                      hide_index=True, width="stretch")
         st.caption("Sell price is assumed to equal the current price; FPL's real rule can differ slightly.")
+
+with tab_season:
+    # ---------------------------------------------------------------- season
+    try:
+        with st.spinner("Loading your season..."):
+            season = season_for_team(team_id)
+    except requests.RequestException:
+        st.error("Couldn't load your season history from FPL. Try again in a few minutes.")
+    else:
+        summary, weeks = season["summary"], season["table"]
+        # Charts pick light or dark colours to match the viewer's theme.
+        mode = "light" if getattr(st.context.theme, "type", "dark") == "light" else "dark"
+
+        st.header(summary["team_name"])
+        last = weeks.iloc[-1]
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Overall points", f"{summary['overall_points']:,}")
+        c2.metric("Overall rank", f"{summary['overall_rank']:,}")
+        c3.metric(f"Gameweek {summary['last_gameweek']}", f"{summary['last_points']} pts",
+                  delta=f"{summary['last_points'] - int(last['average']):+d} vs average")
+        c4.metric("Team value", f"£{summary['value']:.1f}m", help=f"£{summary['bank']:.1f}m in the bank")
+        st.markdown("\n".join(f"- {line}" for line in season["insights"]))
+        if summary["chips_used"]:
+            st.caption("Chips used: " + ", ".join(summary["chips_used"]))
+
+        st.subheader("Am I beating the average?")
+        st.altair_chart(points_chart(weeks, mode), width="stretch", theme=None)
+
+        st.subheader("How's my rank trending?")
+        st.altair_chart(rank_chart(weeks, mode), width="stretch", theme=None)
+
+        st.subheader("Where do my points come from?")
+        totals = season["positions"].groupby("position")["points"].sum()
+        share = ", ".join(f"{pos} {totals[pos] / totals.sum():.0%}" for pos in ["GKP", "DEF", "MID", "FWD"])
+        st.caption(f"Season so far: {share} (captain's extra points count in his position).")
+        st.altair_chart(positions_chart(season["positions"], mode), width="stretch", theme=None)
+
+        with st.expander("Gameweek by gameweek (table)"):
+            show = weeks[["gameweek", "points", "average", "highest", "gw_rank", "overall_rank",
+                          "captain", "captain_points", "bench_points", "transfers", "hit_cost", "chip"]]
+            st.dataframe(show.rename(columns={
+                "gameweek": "GW", "points": "Points", "average": "Average", "highest": "Top",
+                "gw_rank": "GW rank", "overall_rank": "Overall rank", "captain": "Captain",
+                "captain_points": "Captain pts", "bench_points": "Bench pts", "transfers": "Transfers",
+                "hit_cost": "Hit cost", "chip": "Chip"}), hide_index=True, width="stretch")
 
 # ---------------------------------------------------------------- footer
 st.divider()

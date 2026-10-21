@@ -14,7 +14,7 @@ tan-experience/fpl-analytics-and-prediction). Built in phases:
 Next up (agreed plan, in order): app tabs + team ID in URL + projection
 snapshots → best-XI picker with formation options, transfers judged by
 best XI before/after, and -4 hit evaluation → Season tab (rank, points,
-charts across gameweeks) → 3-gameweek projections + fixture grid coloured
+charts across gameweeks) — all done; next: 3-gameweek projections + fixture grid coloured
 by our team model + better suggestion explanations → free hit team (budget
 = the user's real team value) → predicted-vs-actual page → pitch view with
 player cards. No login: everything comes from public data by team ID, and
@@ -47,6 +47,8 @@ decision, why, PM lesson.
 - `src/team.py` — import a squad by team ID
 - `src/transfers.py` — transfer suggestions and the what-if simulator
 - `src/cli.py` — command-line interface
+- `src/lineup.py` — best XI / formation / captain picker (and a fast total-only version)
+- `src/season.py` — a manager's season week by week; `src/charts.py` — its Altair charts
 - `src/snapshot.py` — saves upcoming-gameweek projections (run by `.github/workflows/snapshot.yml`)
 - `tests/` — pytest suite, offline (small made-up tables, no API calls)
 - `DECISIONS.md` — product decision log
@@ -61,6 +63,8 @@ decision, why, PM lesson.
   - `entry/{team_id}/event/{gw}/picks/` — a manager's squad for a given gameweek
   - `element-summary/{player_id}/` — one player's match-by-match history
   - `event/{gw}/live/` — every player's points that gameweek, with a per-stat breakdown
+  - Past picks' `multiplier` already includes automatic subs and chips — use it as-is
+    (verified: reconciles exactly with official gameweek points)
 - Last season's results — football-data.co.uk CSV (team names mapped in `team_strength.py`)
 - Defensive contribution thresholds (DEF 10, MID/FWD 12) aren't in the API;
   verified against FPL's GW6 points breakdown
