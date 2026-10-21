@@ -46,6 +46,43 @@ def get_projections(gameweek: int = None) -> pd.DataFrame:
     return projections.copy()
 
 
+HORIZON = 3  # gameweeks ahead for get_horizon_projections()
+
+_horizon_cache = {}  # weeks -> (time computed, table)
+
+
+def get_horizon_projections(weeks: int = HORIZON) -> pd.DataFrame:
+    """
+    Expected points for each of the next `weeks` gameweeks, one row per
+    player: the usual player info, xp_gw<N> and matches_gw<N> for each
+    gameweek, and xp_total across them all. Cached like get_projections().
+
+    Simplification: FPL's injury percentage only applies to the NEXT round,
+    but we apply it to all of them - so a doubtful player is (cautiously)
+    scaled down for every week, and an injured one counts as 0 throughout.
+    """
+    cached = _horizon_cache.get(weeks)
+    if cached and time.time() - cached[0] < CACHE_SECONDS:
+        return cached[1].copy()
+
+    from src import fetch
+    events = fetch.get_bootstrap_static()["events"]
+    next_gw = next(e["id"] for e in events if e["is_next"])
+    valid = {e["id"] for e in events}
+    gameweeks = [gw for gw in range(next_gw, next_gw + weeks) if gw in valid]
+
+    table = build_player_features()
+    for gw in gameweeks:
+        week = project_next_gameweek(gw)[["id", "xp_total", "matches"]].rename(
+            columns={"xp_total": f"xp_gw{gw}", "matches": f"matches_gw{gw}"})
+        table = table.merge(week, on="id", how="inner")
+    table["xp_total"] = table[[f"xp_gw{gw}" for gw in gameweeks]].sum(axis=1)
+    table.attrs["gameweeks"] = gameweeks  # which weeks the columns cover
+
+    _horizon_cache[weeks] = (time.time(), table)
+    return table.copy()
+
+
 if __name__ == "__main__":
     # Manual check: run `python -m src.projections` from the project root.
     import sys

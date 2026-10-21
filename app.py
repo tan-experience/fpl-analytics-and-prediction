@@ -26,7 +26,8 @@ import streamlit as st
 from src.charts import points_chart, positions_chart, rank_chart
 from src.cli import _money
 from src.lineup import best_xi, formation_options
-from src.projections import get_projections
+from src.fixtures import cell_colour, fixture_score, upcoming_grid
+from src.projections import get_horizon_projections, get_projections
 from src.season import season_for_team
 from src.team import get_squad_projection
 from src.transfers import (
@@ -142,8 +143,8 @@ except requests.RequestException:
 
 # ---------------------------------------------------------------- tabs
 # Each tab answers one question: "how's my team looking?" and "who should I
-# transfer?" and "how's my season going?". A fixtures tab comes later.
-tab_team, tab_transfers, tab_season = st.tabs(["My team", "Transfers", "Season"])
+# transfer?", "who has good fixtures?" and "how's my season going?".
+tab_team, tab_transfers, tab_fixtures, tab_season = st.tabs(["My team", "Transfers", "Fixtures", "Season"])
 
 with tab_team:
     # ---------------------------------------------------------------- squad
@@ -316,6 +317,66 @@ with tab_transfers:
         st.dataframe(compare[list(BREAKDOWN_COLUMNS)].rename(columns=BREAKDOWN_COLUMNS).round(2),
                      hide_index=True, width="stretch")
         st.caption("Sell price is assumed to equal the current price; FPL's real rule can differ slightly.")
+
+with tab_fixtures:
+    # ---------------------------------------------------------------- fixtures
+    mode = "light" if getattr(st.context.theme, "type", "dark") == "light" else "dark"
+    try:
+        with st.spinner("Rating the next few fixtures..."):
+            grid, grid_gws, average_goals, average_cs = upcoming_grid()
+            horizon = get_horizon_projections()
+    except requests.RequestException:
+        st.error("Couldn't load fixtures from FPL. Try again in a few minutes.")
+    else:
+        st.header(f"Next {len(grid_gws)} gameweeks")
+        view = st.radio("Colour fixtures by", ["Attack: expected goals", "Defence: clean-sheet chance"],
+                        horizontal=True)
+        attack = view.startswith("Attack")
+        value_col, average = ("xg_for", average_goals) if attack else ("clean_sheets", average_cs)
+
+        grid["score"] = [fixture_score(v, average) if m else -1.0
+                         for v, m in zip(grid[value_col], grid["matches"])]
+        grid["text"] = [
+            label if not m else f"{label} · {v:.1f}" if attack else f"{label} · {v:.0%}"
+            for label, v, m in zip(grid["label"], grid[value_col], grid["matches"])
+        ]
+        # Best run of fixtures first.
+        order = grid.groupby("team")["score"].sum().sort_values(ascending=False).index
+        text = grid.pivot(index="team", columns="gameweek", values="text").loc[order]
+        scores = grid.pivot(index="team", columns="gameweek", values="score").loc[order]
+        text.columns = [f"GW{gw}" for gw in text.columns]
+        text.index.name = "Club"
+        scores.columns = text.columns
+
+        styled = text.style.apply(
+            lambda column: [f"background-color: {cell_colour(s_, mode)}" for s_ in scores[column.name]],
+            axis=0,
+        )
+        st.dataframe(styled, width="stretch", height=38 * (len(text) + 1))
+        st.caption(
+            "**Blue = easier than an average fixture, red = harder, grey = about average.** "
+            + ("Numbers are the team's expected goals" if attack else "Numbers are the team's clean-sheet chance")
+            + " from our team-strength model - not FPL's 1-5 difficulty rating, which barely predicts "
+            "goals in our backtests. Double gameweeks show both opponents; \"—\" means no match."
+        )
+
+        st.subheader(f"Best players over the next {len(grid_gws)} gameweeks")
+        col1, col2 = st.columns(2)
+        position = col1.selectbox("Position", ["All", "GKP", "DEF", "MID", "FWD"])
+        max_price = col2.slider("Max price (£m)", 4.0, 15.5, 15.5, step=0.5)
+        shortlist = horizon[horizon["now_cost"] <= max_price]
+        if position != "All":
+            shortlist = shortlist[shortlist["position"] == position]
+        week_cols = [f"xp_gw{gw}" for gw in horizon.attrs["gameweeks"]]
+        shown = shortlist.nlargest(20, "xp_total")[
+            ["web_name", "team", "position", "now_cost", *week_cols, "xp_total"]
+        ].rename(columns={"web_name": "Player", "team": "Club", "position": "Pos",
+                          "now_cost": "Price (£m)", "xp_total": "Total",
+                          **{c: c.replace("xp_gw", "GW") for c in week_cols}})
+        st.dataframe(shown.round(2), hide_index=True, width="stretch")
+        st.caption("Expected points per gameweek. FPL's injury percentage only covers the next "
+                   "round, but is applied to every week here, so doubtful players are cautiously "
+                   "scaled down throughout.")
 
 with tab_season:
     # ---------------------------------------------------------------- season
