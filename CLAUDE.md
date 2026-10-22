@@ -15,7 +15,7 @@ Next up (agreed plan, in order): app tabs + team ID in URL + projection
 snapshots → best-XI picker with formation options, transfers judged by
 best XI before/after, and -4 hit evaluation → Season tab (rank, points,
 charts across gameweeks) → 3-gameweek projections, fixture grid (green/red, user's
-choice; keep numbers in cells) and 3-gameweek transfer plans → free hit team — all done; next: predicted-vs-actual page → pitch view with
+choice; keep numbers in cells) and 3-gameweek transfer plans → free hit team → predicted-vs-actual (Track record tab) — all done; next: pitch view with
 player cards. No login: everything comes from public data by team ID, and
 nothing user-specific is saved.
 
@@ -53,6 +53,8 @@ decision, why, PM lesson.
 - `src/free_hit.py` — best 15 for one gameweek via an integer programming solver
   (PuLP 4 + HiGHS; tests compare it with brute force)
 - `src/snapshot.py` — saves upcoming-gameweek projections (run by `.github/workflows/snapshot.yml`)
+- `src/track_record.py` — predicted vs actual per gameweek; `--rebuild` (run by the same workflow)
+  writes backtest-rebuilt predictions for finished gameweeks to the `snapshots` branch (`rebuilt/`)
 - `tests/` — pytest suite, offline (small made-up tables, no API calls)
 - `DECISIONS.md` — product decision log
 - `data/raw/`, `data/processed/` — caches (gitignored, regenerable)

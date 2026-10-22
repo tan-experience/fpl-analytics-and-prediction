@@ -62,7 +62,8 @@ def actual_components(row: pd.Series, scoring: dict) -> dict:
     return parts
 
 
-def evaluate(history: pd.DataFrame, gameweeks: list, scoring: dict) -> pd.DataFrame:
+def evaluate(history: pd.DataFrame, gameweeks: list, scoring: dict,
+             only_played: bool = True, min_prior: int = MIN_PRIOR_MATCHES) -> pd.DataFrame:
     """
     Leakage-free backtest of the combined model AND the original formula,
     on exactly the same player-matches: matches the player actually played,
@@ -72,7 +73,14 @@ def evaluate(history: pd.DataFrame, gameweeks: list, scoring: dict) -> pd.DataFr
     For each gameweek, everything about a player comes from earlier
     matches only. The team-model columns (opponent_expected_goals,
     opponent_factor) must likewise come from a model fitted before that
-    gameweek. Returns one row per player-match with each predicted part
+    gameweek.
+
+    only_played / min_prior: the backtest scores only matches the player
+    played, after 2+ earlier matches (so both formulas are compared fairly).
+    The track record (track_record.py) needs EVERY squad player, including
+    those who didn't play, so it passes only_played=False, min_prior=1.
+
+    Returns one row per player-match with each predicted part
     (pred_*), the total ("predicted"), the original formula ("old_formula"),
     the actual points, and the actual parts (actual_*).
     """
@@ -81,8 +89,9 @@ def evaluate(history: pd.DataFrame, gameweeks: list, scoring: dict) -> pd.DataFr
     rows = []
     for gw in gameweeks:
         before = history[history["gameweek"] < gw]
-        this_gw = history[(history["gameweek"] == gw) & (history["minutes"] > 0)
-                          & (history["prior_matches"] >= MIN_PRIOR_MATCHES)]
+        this_gw = history[(history["gameweek"] == gw) & (history["prior_matches"] >= min_prior)]
+        if only_played:
+            this_gw = this_gw[this_gw["minutes"] > 0]
         if before.empty or this_gw.empty:
             continue
 

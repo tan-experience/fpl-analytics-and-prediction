@@ -48,3 +48,18 @@ def test_your_line_is_the_coloured_one():
     you, average, top = scale["range"]
     assert you == THEMES["dark"]["series"][0]
     assert average == THEMES["dark"]["secondary"] and top == THEMES["dark"]["muted"]
+
+
+TRACK = pd.DataFrame({"gameweek": [7, 8], "source": ["rebuilt", "saved at deadline"],
+                      "predicted": [60.0, 62.0], "actual": [75, 58]})
+MODEL = pd.DataFrame({"gameweek": [7, 8], "source": ["rebuilt", "saved at deadline"],
+                      "rank_corr": [0.38, 0.35], "players": [304, 300]})
+
+
+@pytest.mark.parametrize("mode", ["light", "dark"])
+def test_track_charts_mark_prediction_source_by_shape(mode):
+    from src.charts import SOURCE_SHAPES, accuracy_chart, squad_track_chart
+    for chart in (squad_track_chart(TRACK, mode), accuracy_chart(MODEL, mode)):
+        scale = next(s for s in _find(chart.to_dict(), "scale")
+                     if s.get("domain") == ["saved at deadline", "rebuilt"])
+        assert scale["range"] == SOURCE_SHAPES  # shape, not just colour

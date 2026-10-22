@@ -176,7 +176,8 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
       colour-blind readers)
 - [x] Free hit team: the provably best 15 for next gameweek within your team
       value (integer programming solver), and whether to use the chip now
-- [ ] Predicted vs actual, week by week (from the saved snapshots)
+- [x] Track record: predicted vs actual, week by week - for the model and
+      for your lineup ("saved at deadline" from GW8; "rebuilt" before that)
 - [ ] Pitch view with player cards
 - [ ] Machine-learning projection, compared against the current model
 
@@ -259,6 +260,7 @@ src/
   charts.py      Season tab charts (colour-blind-safe palette, light/dark)
   fixtures.py    upcoming-fixtures grid (Fixtures tab)
   free_hit.py    best possible squad for one gameweek (Free Hit chip)
+  track_record.py  predicted vs actual, week by week (Track record tab)
 app.py           web app (Streamlit)
 tests/           automated tests
 DECISIONS.md     product decision log

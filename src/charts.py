@@ -128,3 +128,58 @@ def positions_chart(positions: pd.DataFrame, mode: str = "dark") -> alt.Chart:
         .transform_calculate(position_order=f"indexof({POSITION_ORDER}, datum.position)")
     )
     return _style(chart, theme)
+
+
+# ---------------------------------------------------------------- track record
+# "Saved at deadline" and "rebuilt" weeks get different marker shapes (not
+# just colours), so the difference is visible to everyone.
+SOURCE_ORDER = ["saved at deadline", "rebuilt"]
+SOURCE_SHAPES = ["circle", "diamond"]
+
+
+def _shape_encoding(theme: dict) -> alt.Shape:
+    """Marker shape by prediction source. Its legend sits below the chart (the
+    colour legend is on top, so they don't crowd a phone screen), with grey
+    symbols - the default black ones vanish on a dark background."""
+    return alt.Shape("source:N", sort=SOURCE_ORDER,
+                     scale=alt.Scale(domain=SOURCE_ORDER, range=SOURCE_SHAPES),
+                     legend=alt.Legend(title=None, orient="bottom", symbolFillColor=theme["secondary"],
+                                       symbolStrokeColor=theme["secondary"]))
+
+
+def squad_track_chart(record: pd.DataFrame, mode: str = "dark") -> alt.Chart:
+    """Your lineup each week: what the app predicted vs what you actually scored."""
+    theme = THEMES[mode]
+    long = record.melt(id_vars=["gameweek", "source"], value_vars=["actual", "predicted"],
+                       var_name="series", value_name="points")
+    long["series"] = long["series"].map({"actual": "You scored", "predicted": "App predicted"})
+    order = ["You scored", "App predicted"]
+    color = alt.Color("series:N", sort=order, legend=alt.Legend(title=None),
+                      scale=alt.Scale(domain=order, range=[theme["series"][0], theme["secondary"]]))
+    dash = alt.StrokeDash("series:N", sort=order, legend=None,
+                          scale=alt.Scale(domain=order, range=[[1, 0], [6, 4]]))
+    shape = _shape_encoding(theme)
+    x = alt.X("gameweek:O", title="Gameweek", axis=alt.Axis(labelAngle=0))
+    tooltip = [alt.Tooltip("gameweek:O", title="Gameweek"), alt.Tooltip("series:N", title=" "),
+               alt.Tooltip("points:Q", title="Points", format=".1f"), alt.Tooltip("source:N", title="Prediction")]
+    base = alt.Chart(long).encode(x=x, y=alt.Y("points:Q", title="Points"), color=color, tooltip=tooltip)
+    lines = base.mark_line(strokeWidth=2).encode(strokeDash=dash)
+    points = base.mark_point(size=80, filled=True).encode(shape=shape)
+    return _style(alt.layer(lines, points), theme)
+
+
+def accuracy_chart(model: pd.DataFrame, mode: str = "dark") -> alt.Chart:
+    """The model's rank correlation each gameweek (did it put players in the right order?)."""
+    theme = THEMES[mode]
+    shape = _shape_encoding(theme)
+    x = alt.X("gameweek:O", title="Gameweek", axis=alt.Axis(labelAngle=0))
+    y = alt.Y("rank_corr:Q", title="Rank correlation",  # the caption explains 0 to 1
+              scale=alt.Scale(domain=[0, max(0.6, float(model["rank_corr"].max()) + 0.1)]))
+    tooltip = [alt.Tooltip("gameweek:O", title="Gameweek"),
+               alt.Tooltip("rank_corr:Q", title="Rank correlation", format=".2f"),
+               alt.Tooltip("players:Q", title="Players who played"),
+               alt.Tooltip("source:N", title="Prediction")]
+    base = alt.Chart(model).encode(x=x, y=y, tooltip=tooltip)
+    line = base.mark_line(strokeWidth=2, color=theme["series"][0])
+    points = base.mark_point(size=80, filled=True, color=theme["series"][0]).encode(shape=shape)
+    return _style(alt.layer(line, points), theme)

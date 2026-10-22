@@ -123,6 +123,34 @@ def get_last_season_results() -> str:
     return text
 
 
+SNAPSHOT_URL = ("https://raw.githubusercontent.com/tan-experience/fpl-analytics-and-prediction/"
+                "snapshots/{folder}/gw{gameweek:02d}.csv")
+
+
+def get_saved_predictions(folder: str, gameweek: int):
+    """
+    A saved predictions file from the repo's `snapshots` branch, as CSV text,
+    or None if there isn't one for that gameweek.
+      folder="projections": saved before the deadline by the snapshot job
+      folder="rebuilt":     recreated afterwards by the backtest (track_record.py)
+    Cached for an hour; a finished gameweek's file doesn't change.
+    """
+    cache_path = RAW_DATA_DIR / f"saved_{folder}_gw{gameweek:02d}.csv"
+    if cache_path.exists() and time.time() - cache_path.stat().st_mtime < 3600:
+        return cache_path.read_text(encoding="utf-8")
+
+    response = requests.get(SNAPSHOT_URL.format(folder=folder, gameweek=gameweek),
+                            headers={"User-Agent": "Mozilla/5.0"})
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    text = response.text
+    temp_path = cache_path.with_suffix(f".{os.getpid()}.tmp")
+    temp_path.write_text(text, encoding="utf-8")
+    os.replace(temp_path, cache_path)
+    return text
+
+
 def get_entry(team_id: int) -> dict:
     """
     Basic info about a manager's team (name, overall rank, total points).
