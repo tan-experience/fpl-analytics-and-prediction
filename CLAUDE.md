@@ -15,8 +15,10 @@ Next up (agreed plan, in order): app tabs + team ID in URL + projection
 snapshots → best-XI picker with formation options, transfers judged by
 best XI before/after, and -4 hit evaluation → Season tab (rank, points,
 charts across gameweeks) → 3-gameweek projections, fixture grid (green/red, user's
-choice; keep numbers in cells) and 3-gameweek transfer plans → free hit team → predicted-vs-actual (Track record tab) — all done; next: pitch view with
-player cards. No login: everything comes from public data by team ID, and
+choice; keep numbers in cells) and 3-gameweek transfer plans → free hit team → predicted-vs-actual (Track record tab) → pitch view with
+player cards — all done. Known follow-ups: rotation discount for double gameweeks,
+"postponed/TBC" in the fixture grid, adjustable horizon (3-6 GWs), chip planner,
+backtesting 2-3 gameweeks ahead. No login: everything comes from public data by team ID, and
 nothing user-specific is saved.
 
 ## Who's building this
@@ -50,6 +52,7 @@ decision, why, PM lesson.
 - `src/lineup.py` — best XI / formation / captain picker (and a fast total-only version)
 - `src/season.py` — a manager's season week by week; `src/charts.py` — its Altair charts
 - `src/fixtures.py` — upcoming-fixtures grid coloured by the team model (Fixtures tab)
+- `src/pitch.py` — lineup drawn on a pitch (HTML/CSS via st.html) and lineup checking
 - `src/free_hit.py` — best 15 for one gameweek via an integer programming solver
   (PuLP 4 + HiGHS; tests compare it with brute force)
 - `src/snapshot.py` — saves upcoming-gameweek projections (run by `.github/workflows/snapshot.yml`)
