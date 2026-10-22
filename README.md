@@ -174,7 +174,8 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
       each week), with week-by-week explanations and fixtures
 - [x] Fixture grid in green/red like the FPL app (numbers kept in every cell for
       colour-blind readers)
-- [ ] Free hit team: best 15 within your real team value
+- [x] Free hit team: the provably best 15 for next gameweek within your team
+      value (integer programming solver), and whether to use the chip now
 - [ ] Predicted vs actual, week by week (from the saved snapshots)
 - [ ] Pitch view with player cards
 - [ ] Machine-learning projection, compared against the current model
@@ -257,6 +258,7 @@ src/
   season.py      a manager's season week by week (Season tab)
   charts.py      Season tab charts (colour-blind-safe palette, light/dark)
   fixtures.py    upcoming-fixtures grid (Fixtures tab)
+  free_hit.py    best possible squad for one gameweek (Free Hit chip)
 app.py           web app (Streamlit)
 tests/           automated tests
 DECISIONS.md     product decision log

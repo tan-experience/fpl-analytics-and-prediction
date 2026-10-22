@@ -494,3 +494,42 @@ team model as it stands today.
 not a technical detail - the same data gave the opposite answer to "is
 this hit worth it?" depending on it. Pick the horizon that matches the
 decision's real consequences, and show it on screen.
+
+---
+
+## 2026-10 — The free hit team: a real solver, proven against brute force
+
+**Problem:** Build the best possible 15-player squad for one gameweek
+within the user's budget - FPL's Free Hit chip - subject to all of FPL's
+rules (2/5/5/3, legal formation, captain, 3 per club, budget).
+
+**Options considered:**
+1. A greedy heuristic: take the best value players until the budget runs out
+2. An **integer programming solver** (PuLP describing the problem, HiGHS
+   solving it): states the goal and the rules, and returns the provably
+   best squad
+
+**Decision:** Option 2.
+
+**Why:** Greedy approaches fail exactly where it matters - spending
+£15.7m on Haaland changes what's affordable everywhere else, and the club
+limit interacts with everything. A solver handles those trade-offs by
+construction, in under a second. To trust it, the tests compare it with
+**brute force** (literally trying every legal squad) on small random
+player pools across 8 different budgets and club mixes: identical answers
+every time.
+
+**Product framing:** the useful question isn't "what's the best squad?"
+but "**should I use the chip this week?**" - so the app shows the gain over
+the user's own best XI, and checks the next 3 gameweeks for blanks and
+doubles in *their* squad. With none (as for the overall leader, +5.4 pts),
+it suggests saving the chip, since free hits pay off most in blank weeks.
+
+**Also:** PuLP 4 no longer ships a solver, so HiGHS (free, open source,
+installs the same on Windows and Streamlit's Linux servers) was added.
+
+**PM lesson:** When a problem has hard rules and real trade-offs, reach
+for the right tool rather than a clever approximation - and earn trust in
+a "black box" by checking it against something simple and obviously
+correct. Then frame the output around the decision the user faces, not
+the calculation.

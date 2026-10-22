@@ -27,6 +27,7 @@ from src.charts import points_chart, positions_chart, rank_chart
 from src.cli import _money
 from src.lineup import best_xi, formation_options
 from src.fixtures import cell_colour, fixture_score, upcoming_grid
+from src.free_hit import free_hit_for_team
 from src.projections import get_horizon_projections, get_projections
 from src.season import season_for_team
 from src.team import get_squad_projection
@@ -104,6 +105,12 @@ def _cached_fixture_labels() -> dict:
     """{team: ["EVE (H)", "LIV (A)", ...]} for the next 3 gameweeks, for suggestion explanations."""
     grid = upcoming_grid()[0]
     return {team: list(rows.sort_values("gameweek")["label"]) for team, rows in grid.groupby("team")}
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_free_hit(team_id: int) -> dict:
+    """The free hit squad for this team, kept for 10 minutes."""
+    return free_hit_for_team(team_id)
 
 
 # ---------------------------------------------------------------- header
@@ -352,6 +359,56 @@ with tab_transfers:
         st.dataframe(compare[list(BREAKDOWN_COLUMNS)].rename(columns=BREAKDOWN_COLUMNS).round(2),
                      hide_index=True, width="stretch")
         st.caption("Sell price is assumed to equal the current price; FPL's real rule can differ slightly.")
+
+    # ---------------------------------------------------------------- free hit
+    st.header("Free Hit chip")
+    st.caption("The best possible squad for next gameweek within your budget - what you'd pick "
+               "with FPL's Free Hit (a one-week squad that reverts afterwards).")
+    with st.spinner("Finding the best possible squad..."):
+        fh = _cached_free_hit(team_id)
+    if fh is None:
+        st.warning("Couldn't build a legal squad within your budget.")
+    else:
+        fh_squad = fh["squad"]
+        c1, c2, c3 = st.columns(3)
+        c1.metric(f"Free hit team ({fh['formation']})", f"{fh['total']:.1f}",
+                  delta=f"{fh['gain']:+.1f} vs your best XI")
+        c2.metric("Your best XI", f"{fh['current_total']:.1f}")
+        c3.metric("Budget used", f"£{fh['cost']:.1f}m", help=f"Budget £{fh['budget']:.1f}m: your squad's "
+                  "value at today's prices plus your bank (FPL uses selling prices, which can be a little lower).")
+
+        # Is this a good week to use it? Free hits shine in blank/double gameweeks.
+        horizon_table = get_horizon_projections()
+        gws = horizon_table.attrs["gameweeks"]
+        mine = horizon_table[horizon_table["id"].isin(squad_df["id"])]
+        blanks = {gw: int((mine[f"matches_gw{gw}"] == 0).sum()) for gw in gws}
+        doubles = {gw: int((mine[f"matches_gw{gw}"] == 2).sum()) for gw in gws}
+        notes = [f"GW{gw}: {n} of your players have no match" for gw, n in blanks.items() if n]
+        notes += [f"GW{gw}: {n} of your players play twice" for gw, n in doubles.items() if n]
+        if notes:
+            st.info("**Blank/double gameweeks ahead** - " + "; ".join(notes) + ". A free hit is usually "
+                    "worth most in a week where many of your players don't play.")
+        else:
+            st.write(f"**Verdict:** +{fh['gain']:.1f} pts this week. None of your players have a blank or "
+                     f"double gameweek in GW{gws[0]}-{gws[-1]}, so this is probably better saved for a "
+                     "week when they do - the gain is usually much bigger then.")
+
+        with st.expander(f"See the free hit team (keeps {len(fh['kept'])} of your current players)"):
+            xi_view = {"xi": fh_squad[fh_squad["starting"]],
+                       "captain": fh_squad.loc[fh_squad["captain"], "id"].iloc[0]}
+            st.markdown(_lineup_text(xi_view))
+            bench = fh_squad[~fh_squad["starting"]]
+            st.caption("Bench: " + ", ".join(f"{r.web_name} ({r.position})" for r in bench.itertuples()))
+            owned = set(fh["kept"])
+            st.dataframe(
+                fh_squad.assign(Owned=fh_squad["id"].isin(owned), Role=[
+                    "Captain" if c else "Starts" if st_ else "Bench"
+                    for c, st_ in zip(fh_squad["captain"], fh_squad["starting"])])
+                [["web_name", "team", "position", "now_cost", "projected_points", "Role", "Owned"]]
+                .rename(columns={"web_name": "Player", "team": "Club", "position": "Pos",
+                                 "now_cost": "Price (£m)", "projected_points": "Expected pts"})
+                .round(2),
+                hide_index=True, width="stretch")
 
 with tab_fixtures:
     # ---------------------------------------------------------------- fixtures
