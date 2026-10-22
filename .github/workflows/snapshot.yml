@@ -1,5 +1,6 @@
 # Saves the upcoming gameweek's projections every few hours, so the app can
-# later compare what it predicted with what actually happened.
+# later compare what it predicted with what actually happened - and, once a
+# gameweek finishes, a rebuilt (backtest) version of its predictions.
 #
 # Snapshots are committed to a separate "snapshots" branch, NOT main: the live
 # Streamlit site redeploys whenever main changes, and saving every few hours
@@ -36,12 +37,19 @@ jobs:
       - name: Save snapshot
         run: python -m src.snapshot --out snapshots-branch/projections
 
+      # Once a gameweek has finished, recreate its predictions with the
+      # backtest (for weeks before snapshots existed, and as a cross-check).
+      # Only does real work when a newly finished gameweek has no file yet.
+      - name: Rebuild predictions for finished gameweeks
+        continue-on-error: true  # never lose the deadline snapshot because of this step
+        run: python -m src.track_record --rebuild snapshots-branch/rebuilt
+
       - name: Commit if anything changed
         working-directory: snapshots-branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add projections
+          git add projections rebuilt
           if git diff --cached --quiet; then
             echo "No changes to save."
           else

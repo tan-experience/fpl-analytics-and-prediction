@@ -533,3 +533,37 @@ for the right tool rather than a clever approximation - and earn trust in
 a "black box" by checking it against something simple and obviously
 correct. Then frame the output around the decision the user faces, not
 the calculation.
+
+---
+
+## 2026-10 — A public track record: saved vs rebuilt predictions, computed off the website
+
+**Problem:** Show how accurate the app's predictions have been, week by
+week - for the model overall and for the user's own lineup. Two snags:
+deadline snapshots only started at GW8, and recreating past predictions
+needs ~450 player histories (minutes of downloading).
+
+**Decisions:**
+1. **Two clearly labelled kinds of prediction.** "Saved at deadline" (●) is
+   exactly what the app showed before the deadline, injury news included.
+   "Rebuilt" (◆) is recreated afterwards by the backtest using only earlier
+   data - honest about the model, but without injury news. Snapshots win
+   whenever both exist, and the label (and marker shape) always shows which.
+2. **Heavy work runs in the scheduled GitHub job, not on the website.** Once
+   a gameweek finishes, the job rebuilds its predictions once and saves a
+   small file to the `snapshots` branch; the website only reads those
+   files plus one request per gameweek for actual points, so the page stays
+   fast. The rebuild step can fail without losing that run's deadline snapshot.
+3. **Measure the model on players who played** (rank correlation), and
+   score a lineup the way FPL does (captain x2, bench not counted).
+
+**First results (GW3-7, rebuilt):** rank correlation 0.32-0.39 every week,
+matching the backtest (0.366); predictions run slightly below actual
+averages because they allow for players not playing. The overall leader
+outscored the app's prediction for their lineup by 81 points over those
+five weeks - fitting for the world's top-ranked manager.
+
+**PM lesson:** A track record only builds trust if it can't be quietly
+flattering - so separate what was actually said at the time from what was
+reconstructed later, and say which is which. And keep expensive work off
+the user's critical path: precompute in the background, serve small results.

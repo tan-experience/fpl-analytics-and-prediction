@@ -23,13 +23,20 @@ import pandas as pd
 import requests
 import streamlit as st
 
-from src.charts import points_chart, positions_chart, rank_chart
+from src.charts import (
+    accuracy_chart,
+    points_chart,
+    positions_chart,
+    rank_chart,
+    squad_track_chart,
+)
 from src.cli import _money
 from src.lineup import best_xi, formation_options
 from src.fixtures import cell_colour, fixture_score, upcoming_grid
 from src.free_hit import free_hit_for_team
 from src.projections import get_horizon_projections, get_projections
 from src.season import season_for_team
+from src.track_record import model_record, squad_record
 from src.team import get_squad_projection
 from src.transfers import (
     plan_transfers,
@@ -113,6 +120,17 @@ def _cached_free_hit(team_id: int) -> dict:
     return free_hit_for_team(team_id)
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_model_record():
+    """The model's week-by-week accuracy - the same for everyone, kept for an hour."""
+    return model_record()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_squad_record(team_id: int):
+    return squad_record(team_id)
+
+
 # ---------------------------------------------------------------- header
 st.title("⚽ FPL Analytics")
 st.write(
@@ -165,7 +183,8 @@ except requests.RequestException:
 # ---------------------------------------------------------------- tabs
 # Each tab answers one question: "how's my team looking?" and "who should I
 # transfer?", "who has good fixtures?" and "how's my season going?".
-tab_team, tab_transfers, tab_fixtures, tab_season = st.tabs(["My team", "Transfers", "Fixtures", "Season"])
+tab_team, tab_transfers, tab_fixtures, tab_season, tab_record = st.tabs(
+    ["My team", "Transfers", "Fixtures", "Season", "Track record"])
 
 with tab_team:
     # ---------------------------------------------------------------- squad
@@ -514,6 +533,51 @@ with tab_season:
                 "gw_rank": "GW rank", "overall_rank": "Overall rank", "captain": "Captain",
                 "captain_points": "Captain pts", "bench_points": "Bench pts", "transfers": "Transfers",
                 "hit_cost": "Hit cost", "chip": "Chip"}), hide_index=True, width="stretch")
+
+with tab_record:
+    # ---------------------------------------------------------------- track record
+    st.header("How accurate has the app been?")
+    st.caption(
+        "Predicted vs actual points for every finished gameweek. **Saved at deadline** (●) = exactly "
+        "what the app showed before the deadline, injury news included. **Rebuilt** (◆) = recreated "
+        "afterwards by the backtest using only earlier data, for weeks before saving began."
+    )
+    mode = "light" if getattr(st.context.theme, "type", "dark") == "light" else "dark"
+    try:
+        with st.spinner("Comparing predictions with what happened..."):
+            model = _cached_model_record()
+            mine = _cached_squad_record(team_id)
+    except requests.RequestException:
+        st.error("Couldn't load the track record. Try again in a few minutes.")
+    else:
+        if model.empty:
+            st.info("No finished gameweeks with saved predictions yet - check back after the next one.")
+        else:
+            st.subheader("Your lineup: predicted vs actual")
+            if not mine.empty:
+                diff = mine["actual"].sum() - mine["predicted"].sum()
+                c1, c2 = st.columns(2)
+                c1.metric("You scored (these gameweeks)", f"{mine['actual'].sum():.0f}")
+                c2.metric("App predicted for your lineup", f"{mine['predicted'].sum():.0f}",
+                          delta=f"you {'beat' if diff >= 0 else 'fell short of'} it by {abs(diff):.0f}",
+                          delta_color="off")
+                st.altair_chart(squad_track_chart(mine, mode), width="stretch", theme=None)
+                st.caption("Predictions use your actual lineup each week - captain counted twice, "
+                           "bench not counted. Points before transfer hits.")
+
+            st.subheader("The model, across all players")
+            st.altair_chart(accuracy_chart(model, mode), width="stretch", theme=None)
+            st.caption(
+                "Rank correlation: did players predicted to score more actually score more? "
+                "1 = perfect order, 0 = random. Measured on players who played. Predictions run a "
+                "little below actual averages because they allow for the chance a player doesn't play."
+            )
+            with st.expander("Gameweek by gameweek (table)"):
+                st.dataframe(model.rename(columns={
+                    "gameweek": "GW", "source": "Prediction", "players": "Players who played",
+                    "rank_corr": "Rank correlation", "mae": "Avg miss (pts)",
+                    "predicted_avg": "Predicted avg", "actual_avg": "Actual avg"}).round(2),
+                    hide_index=True, width="stretch")
 
 # ---------------------------------------------------------------- footer
 st.divider()
