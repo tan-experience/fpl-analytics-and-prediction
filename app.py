@@ -31,9 +31,10 @@ from src.charts import (
     squad_track_chart,
 )
 from src.cli import _money
-from src.lineup import best_xi, formation_options
+from src.lineup import best_xi, formation_options, squad_limits
 from src.fixtures import cell_colour, fixture_score, upcoming_grid
 from src.free_hit import free_hit_for_team
+from src.pitch import check_lineup, lineup_total, pitch_html
 from src.projections import get_horizon_projections, get_projections
 from src.season import season_for_team
 from src.track_record import model_record, squad_record
@@ -108,10 +109,38 @@ def _cached_search(team_id: int, horizon: int) -> dict:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
+def _cached_grid():
+    """upcoming_grid(): (grid, gameweeks, average goals, average clean-sheet chance)."""
+    return upcoming_grid()
+
+
+@st.cache_data(ttl=600, show_spinner=False)
 def _cached_fixture_labels() -> dict:
     """{team: ["EVE (H)", "LIV (A)", ...]} for the next 3 gameweeks, for suggestion explanations."""
-    grid = upcoming_grid()[0]
+    grid = _cached_grid()[0]
     return {team: list(rows.sort_values("gameweek")["label"]) for team, rows in grid.groupby("team")}
+
+
+def _next_fixtures(squad) -> dict:
+    """
+    {player id: (next fixture label, score)} for the pitch cards. The score
+    (-1 hard .. +1 easy) is about clean sheets for goalkeepers and defenders,
+    and goals for midfielders and forwards - what drives their points.
+    """
+    grid, gameweeks, average_goals, average_cs = _cached_grid()
+    first = grid[grid["gameweek"] == gameweeks[0]].set_index("team")
+    result = {}
+    for player in squad.itertuples():
+        if player.team not in first.index:
+            continue
+        row = first.loc[player.team]
+        if not row["matches"]:
+            result[player.id] = ("No match", -1.0)
+            continue
+        defensive = player.position in ("GKP", "DEF")
+        value, average = (row["clean_sheets"], average_cs) if defensive else (row["xg_for"], average_goals)
+        result[player.id] = (row["label"], fixture_score(value, average))
+    return result
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -216,10 +245,38 @@ with tab_team:
                                                                  "total": "Projected pts"}).round(1),
                      hide_index=True, width="stretch")
 
-    st.subheader("Starting XI")
-    st.dataframe(_squad_table(starters), hide_index=True, width="stretch")
-    st.subheader("Bench")
-    st.dataframe(_squad_table(squad_df[~squad_df["is_starting"]]), hide_index=True, width="stretch")
+    # ---------------------------------------------------------------- pitch
+    st.subheader("Pick your XI")
+    st.caption("Starts as the best XI. Choose any 11 of your 15 and a captain - the pitch, "
+               "formation and total update as you go. Nothing is saved.")
+    labels = {r.id: f"{r.web_name} ({r.position}, {r.projected_points:.1f})" for r in squad_df.itertuples()}
+    chosen = st.multiselect("Starting XI", options=list(squad_df["id"]), default=list(best["xi"]["id"]),
+                            format_func=lambda pid: labels[pid], key=f"xi_{team_id}")
+    legal, formation_or_problem = check_lineup(squad_df, chosen, squad_limits())
+    if not legal:
+        st.warning(formation_or_problem + " Showing the best XI until then.")
+        chosen = list(best["xi"]["id"])
+        formation_or_problem = best["formation"]
+    by_points = squad_df[squad_df["id"].isin(chosen)].sort_values("projected_points", ascending=False)
+    captain_options = list(by_points["id"])
+    captain = st.selectbox("Captain", options=captain_options,
+                           index=captain_options.index(best["captain"]) if best["captain"] in captain_options else 0,
+                           format_func=lambda pid: labels[pid], key=f"captain_{team_id}")
+    vice = next((pid for pid in captain_options if pid != captain), None)
+    chosen_total = lineup_total(squad_df, chosen, captain)
+    c1, c2 = st.columns(2)
+    c1.metric(f"Your pick ({formation_or_problem})", f"{chosen_total:.1f}",
+              # round first (+0.0 turns "-0.0" into "0.0")
+              delta=f"{round(chosen_total - best['total'], 1) + 0.0:+.1f} vs best XI", delta_color="normal")
+    c2.metric("Best XI", f"{best['total']:.1f}")
+    st.html(pitch_html(squad_df, chosen, captain, vice, _next_fixtures(squad_df)))
+    st.caption("Each card: next fixture (green = easier, red = harder - clean sheets for "
+               "defenders and keepers, goals for attackers) and expected points (captain doubled).")
+
+    with st.expander("Your current lineup (as picked in FPL)"):
+        st.dataframe(_squad_table(starters), hide_index=True, width="stretch")
+        st.caption("Bench")
+        st.dataframe(_squad_table(squad_df[~squad_df["is_starting"]]), hide_index=True, width="stretch")
 
     with st.expander("Where do these projections come from?"):
         st.caption('Expected points from each part of FPL scoring, before captaincy. '
