@@ -34,7 +34,7 @@ from src.cli import _money
 from src.lineup import best_xi, formation_options, squad_limits
 from src.fixtures import cell_colour, fixture_score, upcoming_grid
 from src.free_hit import free_hit_for_team
-from src.pitch import check_lineup, lineup_total, pitch_html
+from src.pitch import availability, check_lineup, lineup_total, pitch_html
 from src.projections import get_horizon_projections, get_projections
 from src.season import season_for_team
 from src.track_record import model_record, squad_record
@@ -249,7 +249,12 @@ with tab_team:
     st.subheader("Pick your XI")
     st.caption("Starts as the best XI. Choose any 11 of your 15 and a captain - the pitch, "
                "formation and total update as you go. Nothing is saved.")
-    labels = {r.id: f"{r.web_name} ({r.position}, {r.projected_points:.1f})" for r in squad_df.itertuples()}
+    # FPL's availability (injured/doubtful/...) for the cards and the picker.
+    pitch_squad = squad_df.merge(projections[["id", "status", "chance_of_playing_next_round", "news"]],
+                                 on="id", how="left")
+    flags = {r.id: availability(r.status, r.chance_of_playing_next_round) for r in pitch_squad.itertuples()}
+    labels = {r.id: f"{r.web_name} ({r.position}, {r.projected_points:.1f})"
+                    + (f" - {flags[r.id][1]}" if flags[r.id] else "") for r in squad_df.itertuples()}
     chosen = st.multiselect("Starting XI", options=list(squad_df["id"]), default=list(best["xi"]["id"]),
                             format_func=lambda pid: labels[pid], key=f"xi_{team_id}")
     legal, formation_or_problem = check_lineup(squad_df, chosen, squad_limits())
@@ -269,9 +274,15 @@ with tab_team:
               # round first (+0.0 turns "-0.0" into "0.0")
               delta=f"{round(chosen_total - best['total'], 1) + 0.0:+.1f} vs best XI", delta_color="normal")
     c2.metric("Best XI", f"{best['total']:.1f}")
-    st.html(pitch_html(squad_df, chosen, captain, vice, _next_fixtures(squad_df)))
-    st.caption("Each card: next fixture (green = easier, red = harder - clean sheets for "
-               "defenders and keepers, goals for attackers) and expected points (captain doubled).")
+    ruled_out = [labels[pid].split(" (")[0] for pid in chosen if flags[pid] and flags[pid][0] == "out"]
+    if ruled_out:
+        st.warning(f"In your XI but ruled out by FPL: {', '.join(ruled_out)}. "
+                   "Their projection is 0 - consider benching or transferring them.")
+    st.html(pitch_html(pitch_squad, chosen, captain, vice, _next_fixtures(squad_df)))
+    st.caption("Each card: FPL availability (red = ruled out, amber = doubtful, with FPL's chance "
+               "of playing - hover or tap for the news), next fixture (green = easier, red = harder - "
+               "clean sheets for defenders and keepers, goals for attackers) and expected points "
+               "(captain doubled).")
 
     with st.expander("Your current lineup (as picked in FPL)"):
         st.dataframe(_squad_table(starters), hide_index=True, width="stretch")

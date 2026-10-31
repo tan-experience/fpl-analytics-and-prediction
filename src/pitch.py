@@ -4,7 +4,9 @@ pitch.py
 Draws a lineup on a football pitch, FPL-app style: rows for GK, defenders,
 midfielders and forwards, the bench underneath. Each player card shows the
 name, a captain (C) / vice (V) badge, the next fixture (tinted green = easier,
-red = harder, as in the Fixtures tab) and expected points.
+red = harder, as in the Fixtures tab) and expected points - plus FPL's
+availability flag: a red "Injured"/"Suspended"/... strip for players ruled
+out, an amber "75%" strip for doubtful ones, and FPL's news on hover.
 
 Also checks a lineup the user picks themselves (any 11 of their 15) and
 totals it - nothing is saved, everything is recalculated on each change.
@@ -31,6 +33,9 @@ PITCH_CSS = """
 .card .pts { font-size: 13px; font-weight: 700; }
 .card .badge { position: absolute; top: -7px; right: -5px; background: #0b0b0b; color: #fcfcfb;
                border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 18px; font-weight: 700; }
+.card .flag { font-size: 10px; font-weight: 700; border-radius: 4px; margin: 0 2px 3px; padding: 1px 0; }
+.card .flag.out { background: #b42318; color: #ffffff; }
+.card .flag.doubt { background: #eda100; color: #0b0b0b; }
 .bench { margin-top: 10px; background: rgba(127,127,127,.15); border-radius: 12px; padding: 10px 6px; }
 .bench-title { font-family: system-ui, sans-serif; font-size: 12px; opacity: .8; text-align: center; margin-bottom: 6px; }
 @media (max-width: 480px) { .card .name { font-size: 10px; } .card .pts { font-size: 11px; } }
@@ -46,6 +51,25 @@ def _fixture_style(score) -> str:
         return f"background:{NEUTRAL}"
     r, g, b = GOOD if score > 0 else BAD
     return f"background:rgba({r},{g},{b},{0.15 + 0.45 * min(abs(score), 1.0):.2f})"
+
+
+OUT_LABELS = {"i": "Injured", "s": "Suspended", "u": "Unavailable", "n": "Not available"}
+
+
+def availability(status, chance) -> tuple:
+    """
+    FPL's availability as a card flag: ("out", "Injured") for players ruled
+    out, ("doubt", "75%") for doubtful ones, or None if available.
+    (FPL status codes: a = available, d = doubtful, i = injured,
+    s = suspended, u = unavailable/left the club, n = not available, e.g. on loan.)
+    """
+    if status in OUT_LABELS:
+        return "out", OUT_LABELS[status]
+    if status == "d":
+        if chance is None or chance != chance:  # missing (chance != chance catches NaN)
+            return "doubt", "Doubtful"
+        return "doubt", f"{int(chance)}%"
+    return None
 
 
 def check_lineup(squad, xi_ids: list, limits: dict) -> tuple:
@@ -82,8 +106,13 @@ def _card(player, captain_id, vice_id, fixtures) -> str:
              else '<div class="badge">V</div>' if player["id"] == vice_id else "")
     fixture = (f'<div class="fixture" style="{_fixture_style(score)}">{html.escape(label)}</div>'
                if label else '<div class="fixture">&nbsp;</div>')
-    return (f'<div class="card">{badge}<div class="name">{html.escape(str(player["web_name"]))}</div>'
-            f'{fixture}<div class="pts">{points:.1f}</div></div>')
+    # Availability flag (only if the squad table carries FPL's status columns).
+    flag = availability(player.get("status"), player.get("chance_of_playing_next_round"))
+    flag_html = f'<div class="flag {flag[0]}">{flag[1]}</div>' if flag else ""
+    news = player.get("news")
+    title = f' title="{html.escape(str(news))}"' if isinstance(news, str) and news else ""
+    return (f'<div class="card"{title}>{badge}<div class="name">{html.escape(str(player["web_name"]))}</div>'
+            f'{flag_html}{fixture}<div class="pts">{points:.1f}</div></div>')
 
 
 def pitch_html(squad, xi_ids: list, captain_id: int, vice_id: int, fixtures: dict) -> str:

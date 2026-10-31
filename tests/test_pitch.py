@@ -55,3 +55,40 @@ def test_names_are_escaped():
     squad.loc[squad["id"] == 20, "web_name"] = "<b>Hack</b>"
     html = pitch_html(squad, [1, 10, 11, 12, 13, 20, 21, 22, 23, 30, 31], 30, 20, {})
     assert "<b>Hack</b>" not in html and "&lt;b&gt;Hack&lt;/b&gt;" in html
+
+
+# ---- injury / availability flags ---------------------------------------------
+
+from src.pitch import availability  # noqa: E402
+
+
+@pytest.mark.parametrize("status, chance, expected", [
+    ("a", None, None),                       # available: no flag
+    ("d", 75, ("doubt", "75%")),             # doubtful: show FPL's percentage
+    ("d", None, ("doubt", "Doubtful")),
+    ("i", 0, ("out", "Injured")),
+    ("s", 0, ("out", "Suspended")),
+    ("u", 0, ("out", "Unavailable")),
+    ("n", 0, ("out", "Not available")),
+])
+def test_availability_follows_fpl_status(status, chance, expected):
+    assert availability(status, chance) == expected
+
+
+def test_cards_show_flags_and_news():
+    squad = _squad().assign(status="a", chance_of_playing_next_round=None, news="")
+    squad.loc[squad["id"] == 10, ["status", "chance_of_playing_next_round", "news"]] = \
+        ["i", 0, "Back injury - Unknown return date"]
+    squad.loc[squad["id"] == 20, ["status", "chance_of_playing_next_round", "news"]] = \
+        ["d", 75, 'Hip "knock" <75%>']
+    html = pitch_html(squad, [1, 10, 11, 12, 13, 20, 21, 22, 23, 30, 31], 30, 21, {})
+    assert html.count('class="flag out"') == 1 and ">Injured<" in html
+    assert html.count('class="flag doubt"') == 1 and ">75%<" in html
+    assert 'title="Back injury - Unknown return date"' in html          # news on hover
+    assert "&quot;knock&quot; &lt;75%&gt;" in html                       # news is escaped
+
+
+def test_cards_without_status_columns_still_work():
+    # The squad table might not carry availability columns - no flags then, no crash.
+    html = pitch_html(_squad(), [1, 10, 11, 12, 13, 20, 21, 22, 23, 30, 31], 30, 20, {})
+    assert "flag" not in html.replace(".flag", "")

@@ -101,6 +101,7 @@ def build_player_features() -> pd.DataFrame:
             "chance_of_playing_next_round": p["chance_of_playing_next_round"],
             "expected_goal_involvements_per_90": float(p["expected_goal_involvements_per_90"]),
             "status": p["status"],  # 'a' = available, 'i' = injured, 'u' = unavailable, etc.
+            "news": p["news"],      # FPL's injury/suspension note, e.g. "Hip injury - 75% chance of playing"
         })
 
     df = pd.DataFrame(rows)
