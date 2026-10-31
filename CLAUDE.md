@@ -53,6 +53,8 @@ decision, why, PM lesson.
 - `src/season.py` — a manager's season week by week; `src/charts.py` — its Altair charts
 - `src/fixtures.py` — upcoming-fixtures grid coloured by the team model (Fixtures tab)
 - `src/pitch.py` — lineup drawn on a pitch (HTML/CSS via st.html) and lineup checking
+- `src/planner.py` — multi-week transfer plan (solver): buys/sells/XI per week, FPL's free-transfer
+  banking (max 5), -4 hits, 1 pt per transfer banked at the end; powers the Transfers tab's plan
 - `src/free_hit.py` — best 15 for one gameweek via an integer programming solver
   (PuLP 4 + HiGHS; tests compare it with brute force)
 - `src/snapshot.py` — saves upcoming-gameweek projections (run by `.github/workflows/snapshot.yml`)
