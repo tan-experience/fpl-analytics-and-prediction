@@ -180,6 +180,9 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
       for your lineup ("saved at deadline" from GW8; "rebuilt" before that)
 - [x] Pitch view with player cards: pick any 11 of your 15 and a captain, with
       next fixture (green/red) and expected points on each card
+- [x] FPL injury/suspension flags on the player cards (with FPL's news)
+- [ ] Multi-week transfer planner: any number of free transfers, and when to
+      roll them (e.g. saving for a blank gameweek)
 - [ ] Machine-learning projection, compared against the current model
 
 ---
