@@ -180,6 +180,9 @@ The reasoning behind the build lives in [DECISIONS.md](DECISIONS.md). Highlights
       for your lineup ("saved at deadline" from GW8; "rebuilt" before that)
 - [x] Pitch view with player cards: pick any 11 of your 15 and a captain, with
       next fixture (green/red) and expected points on each card
+- [x] Multi-week transfer planner: the best plan for every number of transfers
+      this week (0 = roll, up to 5), with free transfers banking like FPL's - so
+      it can recommend rolling, e.g. to save two for a blank gameweek
 - [ ] Machine-learning projection, compared against the current model
 
 ---
@@ -261,6 +264,7 @@ src/
   charts.py      Season tab charts (colour-blind-safe palette, light/dark)
   fixtures.py    upcoming-fixtures grid (Fixtures tab)
   free_hit.py    best possible squad for one gameweek (Free Hit chip)
+  planner.py     multi-week transfer plan, incl. when to roll (solver)
   track_record.py  predicted vs actual, week by week (Track record tab)
   pitch.py       lineup drawn on a pitch, and checking a lineup you pick
 app.py           web app (Streamlit)

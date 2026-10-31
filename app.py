@@ -34,13 +34,13 @@ from src.cli import _money
 from src.lineup import best_xi, formation_options, squad_limits
 from src.fixtures import cell_colour, fixture_score, upcoming_grid
 from src.free_hit import free_hit_for_team
+from src.planner import advice, plan_options_for_team
 from src.pitch import check_lineup, lineup_total, pitch_html
 from src.projections import get_horizon_projections, get_projections
 from src.season import season_for_team
 from src.track_record import model_record, squad_record
 from src.team import get_squad_projection
 from src.transfers import (
-    plan_transfers,
     simulate_transfer,
     suggestions_from_search,
     transfer_gain_over_horizon,
@@ -158,6 +158,12 @@ def _cached_model_record():
 @st.cache_data(ttl=3600, show_spinner=False)
 def _cached_squad_record(team_id: int):
     return squad_record(team_id)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_plan(team_id: int, free_transfers: int, horizon: int) -> dict:
+    """The multi-week transfer plan, kept for 10 minutes."""
+    return plan_options_for_team(team_id, free_transfers, horizon)
 
 
 # ---------------------------------------------------------------- header
@@ -300,56 +306,55 @@ with tab_transfers:
         help="Check the Transfers page in the FPL app. Each transfer beyond your free ones costs 4 points.",
     )
 
-    # One search, used for the plan, the suggestions and the what-if defaults.
-    # Cached, so changing "free transfers" doesn't re-run the whole search.
-    with st.spinner("Searching every transfer and pair of transfers..."):
-        search = _cached_search(team_id, horizon)
-    plan = plan_transfers(search, free_transfers=free_transfers)
-    options = plan["options"]
-    pair = search["best_pair"]
-    top_single = search["singles"].iloc[0] if len(search["singles"]) else None
-    gws = search.get("gameweeks")
+    # The multi-week planner: for each number of transfers THIS week (0 = roll),
+    # the best plan over the coming weeks - free transfers banking up to 5, -4
+    # per extra transfer. Cached, so switching options is instant.
+    with st.spinner("Planning transfers over the coming weeks..."):
+        planned = _cached_plan(team_id, free_transfers, horizon)
+    best = planned["best"]
+    gws = planned["gameweeks"]
     period = f"over GW{gws[0]}-{gws[-1]}" if gws else "next gameweek"
+    this_week = best["plan"]["weeks"][0]
 
-    if plan["recommended"] == "none":
-        st.info(f"**Recommendation: save your transfer.** No transfer improves your best XI "
-                f"{period} by more than it costs.")
-    elif plan["recommended"] == "single":
-        st.success(f"**Recommendation: {top_single['out_name']} → {top_single['in_name']}** "
-                   f"(+{options['single']['net']:.2f} pts to your best XI {period}"
-                   + (f", after a -{options['single']['hit']} hit" if options["single"]["hit"] else "") + ")")
+    if best["transfers_now"] == 0:
+        st.info(f"**Recommendation: roll your free transfer{'s' if free_transfers > 1 else ''}.** "
+                + advice(planned))
     else:
-        st.success(f"**Recommendation: two transfers** - {pair['out_names'][0]} → {pair['in_names'][0]} "
-                   f"and {pair['out_names'][1]} → {pair['in_names'][1]} "
-                   f"(+{options['pair']['gain']:.2f} pts {period}"
-                   + (f", -{options['pair']['hit']} hit = {options['pair']['net']:+.2f}" if options["pair"]["hit"] else "")
-                   + f"; best formation next gameweek {pair['formation_after']})")
+        moves = ", ".join(f"{o} → {i}" for o, i in this_week["transfers"])
+        st.success(f"**Recommendation: {moves}.** " + advice(planned))
 
-    if plan["hit_worth_it"] is not None:
-        extra = options["pair"]["gain"] - options["single"]["gain"]
-        verdict = "worth it" if plan["hit_worth_it"] else "not worth it"
-        st.write(f"**Is a -4 hit worth it?** {verdict.capitalize()}: a second transfer adds "
-                 f"{extra:+.2f} pts {period}, against the "
-                 f"{options['pair']['hit'] - options['single']['hit']}-point cost.")
+    rows = []
+    for option in planned["options"]:
+        week0 = option["plan"]["weeks"][0]
+        rows.append({
+            "This week": "Roll (no transfer)" if option["transfers_now"] == 0
+                         else f"{option['transfers_now']} transfer{'s' if option['transfers_now'] > 1 else ''}",
+            "Moves": ", ".join(f"{o} → {i}" for o, i in week0["transfers"]) or "-",
+            "Hit": -4 * week0["hits"],
+            f"Net pts {period}": round(option["gain"], 1),
+            "Best": "✓" if option is best else "",
+        })
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
-    with st.expander("Compare the options"):
-        rows = [{"Plan": "No transfer", "Gain": 0.0, "Hit": 0, "Net": 0.0}]
-        if top_single is not None:
-            rows.append({"Plan": f"{top_single['out_name']} → {top_single['in_name']}",
-                         "Gain": options["single"]["gain"], "Hit": -options["single"]["hit"],
-                         "Net": options["single"]["net"]})
-        if pair:
-            rows.append({"Plan": f"{pair['out_names'][0]} → {pair['in_names'][0]}, "
-                                 f"{pair['out_names'][1]} → {pair['in_names'][1]}",
-                         "Gain": options["pair"]["gain"], "Hit": -options["pair"]["hit"],
-                         "Net": options["pair"]["net"]})
-        st.dataframe(pd.DataFrame(rows).round(2), hide_index=True, width="stretch")
-    if horizon == 1:
-        st.caption("⚠️ Next gameweek only. A new player keeps scoring for weeks, so this "
-                   "undervalues transfers - hits especially. Try \"Next 3 gameweeks\".")
-    else:
-        st.caption(f"Judged {period}, with your best XI and captain re-picked each week. "
-                   "A -4 hit is paid once.")
+    if len(best["plan"]["weeks"]) > 1:
+        with st.expander("The plan week by week"):
+            for gw_label, week in zip(gws, best["plan"]["weeks"]):
+                moves = ", ".join(f"{o} → {i}" for o, i in week["transfers"]) or "no transfer (roll)"
+                hit = f", -{4 * week['hits']} hit" if week["hits"] else ""
+                st.markdown(f"**GW{gw_label}** ({week['free_transfers']} free transfer"
+                            f"{'s' if week['free_transfers'] != 1 else ''}): {moves}{hit} - "
+                            f"captain {week['captain']}, {week['points']:.1f} expected pts")
+            st.caption(f"{best['plan']['free_transfers_left']} free transfer(s) left after GW{gws[-1]}. "
+                       "Only this week's moves matter: the plan is redone every week with fresh data.")
+    st.caption(
+        "Net points: the extra your best XI scores (captain twice, re-picked each week) after -4 hits, "
+        "plus 1 point for each free transfer still banked at the end - a 3-week plan can't see "
+        "the weeks after, so saved transfers get a small value of their own. "
+        + ("" if gws else "⚠️ Next gameweek only: rolling can't show its value. Try \"Next 3 gameweeks\".")
+    )
+
+    # The single-transfer search: for the explained list below and the what-if defaults.
+    search = _cached_search(team_id, horizon)
 
     st.subheader("Best single transfers")
     suggestions = suggestions_from_search(search, fixtures=_cached_fixture_labels())

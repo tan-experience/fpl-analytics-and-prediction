@@ -567,3 +567,42 @@ five weeks - fitting for the world's top-ranked manager.
 flattering - so separate what was actually said at the time from what was
 reconstructed later, and say which is which. And keep expensive work off
 the user's critical path: precompute in the background, serve small results.
+
+---
+
+## 2026-10 — A multi-week transfer planner: more free transfers, and when to roll
+
+**Problem:** Two gaps reported from use: (1) with 3-5 free transfers the
+planner still only compared none / 1 / 2 transfers, and (2) it had no idea
+of rolling - saving a free transfer (FPL banks up to 5) for a week when two
+are needed, such as a blank gameweek.
+
+**Options considered:**
+1. Extend the search to triples and beyond, plus a rule of thumb for rolling
+   ("roll if the best transfer gains less than X")
+2. **A multi-week plan solved exactly**: the free-hit solver extended over
+   3 gameweeks, deciding buys, sells, XI and captain for every week, with
+   FPL's banking rule built in (unused transfers roll over, +1 a week, max 5;
+   -4 per extra transfer). Rolling is simply one of the plans it can choose.
+
+**Decision:** Option 2, with the app showing the best plan for each number
+of transfers *this* week (0 = roll, up to your free transfers + 1), so
+more free transfers automatically mean more options, and a one-line reason.
+
+**Judgement call - the end of the horizon:** a 3-week plan sees nothing
+after week 3, so it would burn transfers at the end and never value saving
+them. Each free transfer still banked at the end is worth 1 point. This is
+a tunable estimate (a free transfer's true value depends on what's coming),
+stated on screen; worth calibrating against how plans play out.
+
+**Trust:** over one week the planner must exactly match the existing
+transfer search (tested for 0, 1 and 2 free transfers). In a scenario
+built so that two transfers are needed next week, it rolls now and makes
+both next week. Writing that scenario surfaced a subtlety: buying next
+week's replacement *early* (selling a benched player now) is exactly as
+good as rolling - a legitimate tactic the planner found by itself.
+
+**PM lesson:** Users describe problems in terms of the moves they know
+("roll for a blank week"); the product should solve the underlying
+problem (when to spend a scarce resource across time) so those moves fall
+out of it - and still explain the answer in the user's terms.
